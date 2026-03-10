@@ -1,14 +1,13 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+
 
 mod agents;
 mod context;
 mod skills;
+mod terminal;
 mod ui;
 
-use agents::AgentManager;
-use context::SharedContext;
 use ui::App;
 
 #[derive(Parser)]
@@ -49,7 +48,7 @@ enum SkillCommands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::init();
+    tracing_subscriber::fmt::init();
     
     let cli = Cli::parse();
     

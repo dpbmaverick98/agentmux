@@ -6,17 +6,17 @@ use crossterm::{
 };
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::agents::{AgentConfig, AgentManager, Config};
+use crate::agents::{AgentManager, Config};
 use crate::context::SharedContext;
 
 pub struct App {
@@ -51,7 +51,7 @@ impl App {
                     .join("shared")
                     .join(&config.project.name);
                 
-                agent_manager.start_agent(agent, working_dir.clone(), shared_dir).await?;
+                agent_manager.start_agent(&agent.name, working_dir.clone(), shared_dir)?;
             }
         }
         
@@ -85,7 +85,7 @@ impl App {
         terminal.show_cursor()?;
         
         // Stop all agents
-        self.agent_manager.stop_all().await?;
+        self.agent_manager.stop_all()?;
         
         result
     }
@@ -260,7 +260,9 @@ impl App {
         let files = self.shared_context.list_files().unwrap_or_default();
         
         let mut text = Text::from(vec![
-            Line::from("Shared Context Files:").style(Style::default().add_modifier(Modifier::BOLD)),
+            Line::from(vec![
+                Span::styled("Shared Context Files:", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
             Line::from(""),
         ]);
         
@@ -274,7 +276,9 @@ impl App {
         // Add notifications
         if !self.notifications.is_empty() {
             text.lines.push(Line::from(""));
-            text.lines.push(Line::from("Notifications:").style(Style::default().add_modifier(Modifier::BOLD)));
+            text.lines.push(Line::from(vec![
+                Span::styled("Notifications:", Style::default().add_modifier(Modifier::BOLD)),
+            ]));
             for notif in &self.notifications {
                 text.lines.push(Line::from(format!("• {}", notif)));
             }
