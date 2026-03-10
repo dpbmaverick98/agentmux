@@ -2507,56 +2507,66 @@ program2.command("start").description("Start full AgentMux environment with 4 wi
   try {
     execSync(`tmux kill-session -t ${session} 2>/dev/null`);
   } catch {}
-  console.log(source_default.gray("Creating tmux session..."));
-  execSync(`tmux new-session -d -s ${session} -n status`);
+  console.log(source_default.gray("Creating 4-pane split screen..."));
+  execSync(`tmux new-session -d -s ${session} -n agentmux`);
+  console.log(source_default.gray("Creating kimi pane..."));
+  execSync(`tmux split-window -h -t ${session}`);
+  console.log(source_default.gray("Creating minimax pane..."));
+  execSync(`tmux select-pane -t ${session}:0.0`);
+  execSync(`tmux split-window -v -t ${session}`);
+  console.log(source_default.gray("Creating claude pane..."));
+  execSync(`tmux select-pane -t ${session}:0.1`);
+  execSync(`tmux split-window -v -t ${session}`);
+  console.log(source_default.gray("Setting up status pane..."));
+  execSync(`tmux select-pane -t ${session}:0.0`);
+  execSync(`tmux send-keys -t ${session}:0.0 "clear" C-m`);
+  setTimeout(() => {
+    execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
+  }, 500);
   if (options.kimi) {
-    console.log(source_default.gray("Spawning kimi..."));
-    execSync(`tmux new-window -t ${session} -n kimi`);
+    console.log(source_default.gray("Starting kimi..."));
+    execSync(`tmux select-pane -t ${session}:0.1`);
     const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${process.cwd()} opencode run --provider kimi --model kimi-k2.5 -c`;
-    execSync(`tmux send-keys -t ${session}:kimi "${kimiCmd}" C-m`);
+    execSync(`tmux send-keys -t ${session}:0.1 "${kimiCmd}" C-m`);
     setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:kimi "clear && echo '\uD83D\uDC4B Welcome kimi! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+      execSync(`tmux send-keys -t ${session}:0.1 "clear && echo '\uD83D\uDC4B KIMI - Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working'" C-m`);
     }, 2000);
   }
   if (options.minimax) {
-    console.log(source_default.gray("Spawning minimax..."));
-    execSync(`tmux new-window -t ${session} -n minimax`);
+    console.log(source_default.gray("Starting minimax..."));
+    execSync(`tmux select-pane -t ${session}:0.2`);
     const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${process.cwd()} opencode run --provider minimax --model MiniMax-M2.5 -c`;
-    execSync(`tmux send-keys -t ${session}:minimax "${minimaxCmd}" C-m`);
+    execSync(`tmux send-keys -t ${session}:0.2 "${minimaxCmd}" C-m`);
     setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:minimax "clear && echo '\uD83D\uDC4B Welcome minimax! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+      execSync(`tmux send-keys -t ${session}:0.2 "clear && echo '\uD83D\uDC4B MINIMAX - Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working'" C-m`);
     }, 2000);
   }
   if (options.claude) {
-    console.log(source_default.gray("Spawning claude..."));
-    execSync(`tmux new-window -t ${session} -n claude`);
+    console.log(source_default.gray("Starting claude..."));
+    execSync(`tmux select-pane -t ${session}:0.3`);
     const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${process.cwd()} claude --dangerously-skip-permissions -c`;
-    execSync(`tmux send-keys -t ${session}:claude "${claudeCmd}" C-m`);
+    execSync(`tmux send-keys -t ${session}:0.3 "${claudeCmd}" C-m`);
     setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:claude "clear && echo '\uD83D\uDC4B Welcome claude! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+      execSync(`tmux send-keys -t ${session}:0.3 "clear && echo '\uD83D\uDC4B CLAUDE - Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working'" C-m`);
     }, 2000);
   }
-  console.log(source_default.gray("Setting up status window..."));
-  execSync(`tmux send-keys -t ${session}:status "clear" C-m`);
-  setTimeout(() => {
-    execSync(`tmux send-keys -t ${session}:status "${process.argv[0]} ${process.argv[1]} status" C-m`);
-  }, 500);
+  execSync(`tmux select-layout -t ${session} tiled`);
   console.log(source_default.green(`
 \u2705 AgentMux environment ready!`));
   console.log(source_default.yellow(`
-\uD83D\uDDA5\uFE0F  Layout:`));
-  console.log(source_default.white("   Window 1 (status): AgentMux status monitor"));
-  if (options.kimi)
-    console.log(source_default.white("   Window 2 (kimi): opencode with kimi"));
-  if (options.minimax)
-    console.log(source_default.white("   Window 3 (minimax): opencode with minimax"));
-  if (options.claude)
-    console.log(source_default.white("   Window 4 (claude): claude code"));
+\uD83D\uDDA5\uFE0F  Split Screen Layout:`));
+  console.log(source_default.white("   \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"));
+  console.log(source_default.white("   \u2502    STATUS     \u2502     KIMI      \u2502"));
+  console.log(source_default.white("   \u2502   (top-left)  \u2502  (top-right)  \u2502"));
+  console.log(source_default.white("   \u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"));
+  console.log(source_default.white("   \u2502    MINIMAX    \u2502    CLAUDE     \u2502"));
+  console.log(source_default.white("   \u2502 (bottom-left) \u2502 (bottom-right)\u2502"));
+  console.log(source_default.white("   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"));
   console.log(source_default.blue(`
 \uD83D\uDD17 Attaching now...`));
-  console.log(source_default.gray("   Ctrl+B + 1-4: Switch windows"));
-  console.log(source_default.gray("   Ctrl+B + d: Detach (keep running in background)"));
-  console.log(source_default.gray(`   Ctrl+B + &: Kill window
+  console.log(source_default.gray("   Ctrl+B + arrow: Move between panes"));
+  console.log(source_default.gray("   Ctrl+B + z: Zoom current pane"));
+  console.log(source_default.gray(`   Ctrl+B + d: Detach (keep running)
 `));
   spawn("tmux", ["attach", "-t", session], { stdio: "inherit" });
 });
