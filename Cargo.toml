@@ -1,0 +1,55 @@
+[package]
+name = "agentmux"
+version = "0.1.0"
+edition = "2021"
+authors = ["AgentMux Team"]
+description = "🌊 Minimal terminal multiplexer for AI agent collaboration"
+license = "MIT"
+repository = "https://github.com/dpbmaverick98/agentmux"
+
+[[bin]]
+name = "agentmux"
+path = "src/main.rs"
+
+[dependencies]
+# Terminal UI
+crossterm = "0.27"
+ratatui = "0.24"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# File watching
+notify = "6.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Process management
+portable-pty = "0.8"
+
+# HTTP client (for future API)
+reqwest = { version = "0.11", features = ["json"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Directories
+dirs = "5.0"
+
+# Time
+chrono = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
