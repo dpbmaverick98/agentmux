@@ -184,8 +184,10 @@ program
     // Create 4-pane split screen layout
     console.log(chalk.gray('Creating 4-pane split screen...'));
     
-    // Create session with first pane (status - top left)
+    // Create session with first pane (status - top left) and enable mouse
     execSync(`tmux new-session -d -s ${session} -n agentmux`);
+    execSync(`tmux set -t ${session} mouse on`);
+    execSync(`tmux set -t ${session} mode-mouse on`);
     
     // Split horizontally - creates right pane (kimi - top right)
     console.log(chalk.gray('Creating kimi pane...'));
@@ -264,6 +266,7 @@ program
     console.log(chalk.white('   └───────────────┴───────────────┘'));
 
     console.log(chalk.blue('\n🔗 Attaching now...'));
+    console.log(chalk.yellow('   🖱️  MOUSE ENABLED: Click to switch panes!'));
     console.log(chalk.gray('   Ctrl+B + arrow: Move between panes'));
     console.log(chalk.gray('   Ctrl+B + z: Zoom current pane'));
     console.log(chalk.gray('   Ctrl+B + d: Detach (keep running)\n'));

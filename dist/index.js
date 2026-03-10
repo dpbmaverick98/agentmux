@@ -2509,6 +2509,8 @@ program2.command("start").description("Start full AgentMux environment with 4 wi
   } catch {}
   console.log(source_default.gray("Creating 4-pane split screen..."));
   execSync(`tmux new-session -d -s ${session} -n agentmux`);
+  execSync(`tmux set -t ${session} mouse on`);
+  execSync(`tmux set -t ${session} mode-mouse on`);
   console.log(source_default.gray("Creating kimi pane..."));
   execSync(`tmux split-window -h -t ${session}`);
   console.log(source_default.gray("Creating minimax pane..."));
@@ -2564,6 +2566,7 @@ program2.command("start").description("Start full AgentMux environment with 4 wi
   console.log(source_default.white("   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"));
   console.log(source_default.blue(`
 \uD83D\uDD17 Attaching now...`));
+  console.log(source_default.yellow("   \uD83D\uDDB1\uFE0F  MOUSE ENABLED: Click to switch panes!"));
   console.log(source_default.gray("   Ctrl+B + arrow: Move between panes"));
   console.log(source_default.gray("   Ctrl+B + z: Zoom current pane"));
   console.log(source_default.gray(`   Ctrl+B + d: Detach (keep running)
