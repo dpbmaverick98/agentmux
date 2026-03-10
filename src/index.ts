@@ -402,18 +402,45 @@ program
   .description('Show current status of all agents and JJ changes')
   .action(() => {
     console.log(chalk.blue.bold('\n📊 AgentMux Status\n'));
-    
+
+    // Detect project directory - check if we're in a project or use env var
+    let projectDir = process.cwd();
+    const envProject = process.env.AGENTMUX_PROJECT;
+
+    // If AGENTMUX_PROJECT is set and exists, use it
+    if (envProject && fs.existsSync(envProject)) {
+      projectDir = envProject;
+    } else {
+      // Try to find project by looking for .jj directory in parent folders
+      let currentDir = process.cwd();
+      while (currentDir !== '/') {
+        if (fs.existsSync(path.join(currentDir, '.jj'))) {
+          projectDir = currentDir;
+          break;
+        }
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) break;
+        currentDir = parentDir;
+      }
+    }
+
     // Show JJ changes
     console.log(chalk.yellow('JJ Changes:'));
     if (checkJJ()) {
       try {
-        const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n"');
-        if (log) {
-          console.log(log);
+        // Check if there's a jj repo in the project directory
+        if (fs.existsSync(path.join(projectDir, '.jj'))) {
+          const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n"', { cwd: projectDir });
+          if (log && log.trim()) {
+            console.log(log);
+          } else {
+            console.log(chalk.gray('  No changes yet'));
+          }
         } else {
-          console.log(chalk.gray('  No changes yet'));
+          console.log(chalk.gray(`  No JJ repo found in ${projectDir}`));
+          console.log(chalk.gray('  Run: agentmux init <project>'));
         }
-      } catch {
+      } catch (e) {
         console.log(chalk.gray('  No JJ repo found'));
       }
     } else {

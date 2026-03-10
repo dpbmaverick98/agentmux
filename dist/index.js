@@ -2665,16 +2665,38 @@ program2.command("status").description("Show current status of all agents and JJ
   console.log(source_default.blue.bold(`
 \uD83D\uDCCA AgentMux Status
 `));
+  let projectDir = process.cwd();
+  const envProject = process.env.AGENTMUX_PROJECT;
+  if (envProject && fs.existsSync(envProject)) {
+    projectDir = envProject;
+  } else {
+    let currentDir = process.cwd();
+    while (currentDir !== "/") {
+      if (fs.existsSync(path.join(currentDir, ".jj"))) {
+        projectDir = currentDir;
+        break;
+      }
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir)
+        break;
+      currentDir = parentDir;
+    }
+  }
   console.log(source_default.yellow("JJ Changes:"));
   if (checkJJ()) {
     try {
-      const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n"');
-      if (log) {
-        console.log(log);
+      if (fs.existsSync(path.join(projectDir, ".jj"))) {
+        const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n"', { cwd: projectDir });
+        if (log && log.trim()) {
+          console.log(log);
+        } else {
+          console.log(source_default.gray("  No changes yet"));
+        }
       } else {
-        console.log(source_default.gray("  No changes yet"));
+        console.log(source_default.gray(`  No JJ repo found in ${projectDir}`));
+        console.log(source_default.gray("  Run: agentmux init <project>"));
       }
-    } catch {
+    } catch (e) {
       console.log(source_default.gray("  No JJ repo found"));
     }
   } else {
