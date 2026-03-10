@@ -2510,7 +2510,6 @@ program2.command("start").description("Start full AgentMux environment with 4 wi
   console.log(source_default.gray("Creating 4-pane split screen..."));
   execSync(`tmux new-session -d -s ${session} -n agentmux`);
   execSync(`tmux set -t ${session} mouse on`);
-  execSync(`tmux set -t ${session} mode-mouse on`);
   console.log(source_default.gray("Creating kimi pane..."));
   execSync(`tmux split-window -h -t ${session}`);
   console.log(source_default.gray("Creating minimax pane..."));

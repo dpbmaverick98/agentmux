@@ -187,7 +187,6 @@ program
     // Create session with first pane (status - top left) and enable mouse
     execSync(`tmux new-session -d -s ${session} -n agentmux`);
     execSync(`tmux set -t ${session} mouse on`);
-    execSync(`tmux set -t ${session} mode-mouse on`);
     
     // Split horizontally - creates right pane (kimi - top right)
     console.log(chalk.gray('Creating kimi pane...'));
