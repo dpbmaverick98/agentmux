@@ -26,7 +26,7 @@ You use multiple AI agents:
 ### One-Line Install
 
 ```bash
-curl -fsSL https://agentmux.ai/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/install.sh | bash
 ```
 
 ### Create a Project
