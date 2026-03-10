@@ -22,12 +22,14 @@ impl TerminalSurface {
     ) -> Result<Self> {
         // Create PTY
         let pty_system = portable_pty::native_pty_system();
-        let pair = pty_system.openpty(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })?;
+        let pair = pty_system
+            .openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to open PTY: {}", e))?;
 
         // Spawn command
         let mut cmd = CommandBuilder::new(command);
@@ -38,7 +40,10 @@ impl TerminalSurface {
             cmd.env(key, value);
         }
 
-        let _child = pair.slave.spawn_command(cmd)?;
+        let _child = pair
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e| anyhow::anyhow!("Failed to spawn command '{}': {}", command, e))?;
 
         Ok(Self {
             master: pair.master,
@@ -48,10 +53,17 @@ impl TerminalSurface {
 
     /// Send text input to the terminal (character by character like typing)
     pub fn send_text(&mut self, text: &str) -> Result<()> {
-        let mut writer = self.master.take_writer()?;
+        let mut writer = self
+            .master
+            .take_writer()
+            .map_err(|e| anyhow::anyhow!("Failed to get PTY writer: {}", e))?;
         for byte in text.bytes() {
-            writer.write_all(&[byte])?;
-            writer.flush()?;
+            writer
+                .write_all(&[byte])
+                .map_err(|e| anyhow::anyhow!("Failed to write to PTY: {}", e))?;
+            writer
+                .flush()
+                .map_err(|e| anyhow::anyhow!("Failed to flush PTY: {}", e))?;
             // Small delay to simulate typing
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
@@ -60,7 +72,10 @@ impl TerminalSurface {
 
     /// Read output from PTY
     pub fn process_output(&mut self) -> Result<()> {
-        let mut reader = self.master.try_clone_reader()?;
+        let mut reader = self
+            .master
+            .try_clone_reader()
+            .map_err(|e| anyhow::anyhow!("Failed to get PTY reader: {}", e))?;
         let mut buf = [0u8; 4096];
         loop {
             match reader.read(&mut buf) {
