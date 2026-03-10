@@ -2365,6 +2365,7 @@ var chalkStderr = createChalk({ level: stderrColor ? stderrColor.level : 0 });
 var source_default = chalk;
 
 // src/index.ts
+import { spawn } from "child_process";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -2440,15 +2441,51 @@ Next steps:`));
   console.log(source_default.gray(`  2. agentmux tmux-start`));
   console.log(source_default.gray(`  3. agentmux spawn kimi "Your task"`));
 });
-program2.command("tmux-start").description("Start tmux session for AgentMux").action(() => {
+program2.command("tmux-start").description("Start tmux session for AgentMux").option("-a, --attach", "Auto-attach to tmux after starting").action((options) => {
   if (!checkTmux())
     return;
   const session = getSessionName();
   ensureSession();
   console.log(source_default.green(`\u2705 tmux session '${session}' ready`));
-  console.log(source_default.gray(`
-Attach with: tmux attach -t ` + session));
-  console.log(source_default.gray("Or use: agentmux spawn <agent> <task>"));
+  if (options.attach) {
+    console.log(source_default.blue(`
+\uD83D\uDD17 Attaching to tmux...`));
+    console.log(source_default.gray("   Press Ctrl+B then c to create new window"));
+    console.log(source_default.gray("   Press Ctrl+B then n/p to switch windows"));
+    console.log(source_default.gray(`   Press Ctrl+B then d to detach
+`));
+    spawn("tmux", ["attach", "-t", session], { stdio: "inherit" });
+  } else {
+    console.log(source_default.yellow(`
+\uD83D\uDC40 To see your agents, run:`));
+    console.log(source_default.white("   tmux attach -t " + session));
+    console.log(source_default.gray(`
+Or spawn an agent:`));
+    console.log(source_default.gray('   agentmux spawn kimi "Your task"'));
+  }
+});
+program2.command("attach").description("Attach to the AgentMux tmux session").action(() => {
+  if (!checkTmux())
+    return;
+  const session = getSessionName();
+  console.log(source_default.blue(`\uD83D\uDD17 Attaching to tmux session: ${session}`));
+  console.log(source_default.gray(`Press Ctrl+B then d to detach
+`));
+  spawn("tmux", ["attach", "-t", session], { stdio: "inherit" });
+});
+program2.command("windows").description("List all tmux windows").action(() => {
+  if (!checkTmux())
+    return;
+  const session = getSessionName();
+  try {
+    const output = exec(`tmux list-windows -t ${session} -F "#I: #W"`);
+    console.log(source_default.blue(`
+\uD83D\uDCCB Windows in ${session}:
+`));
+    console.log(output || source_default.gray("  No windows yet"));
+  } catch {
+    console.log(source_default.red(`\u274C No tmux session. Run: agentmux tmux-start`));
+  }
 });
 program2.command("spawn <agent> [task...]").description("Spawn an AI agent in a new tmux window").option("-p, --provider <provider>", "AI provider (kimi, minimax)", "kimi").action((agent, task, options) => {
   if (!checkTmux())
@@ -2482,7 +2519,9 @@ program2.command("spawn <agent> [task...]").description("Spawn an AI agent in a 
   }, 1000);
   console.log(source_default.green(`\u2705 Spawned ${agent} in tmux window`));
   console.log(source_default.gray(`   Task: ${taskStr}`));
-  console.log(source_default.gray(`   Switch: tmux select-window -t ${session}:${windowName}`));
+  console.log(source_default.yellow(`
+\uD83D\uDC40 To see it, run: tmux attach -t ${session}`));
+  console.log(source_default.gray(`   Then press Ctrl+B, then ${windowName === "kimi" ? "2" : windowName === "minimax" ? "3" : windowName === "claude" ? "4" : "window number"} to switch to ${agent}`));
 });
 program2.command("send <to> <message...>").description("Send a message to another agent (uses tmux send-keys)").action((to, message) => {
   if (!checkTmux())

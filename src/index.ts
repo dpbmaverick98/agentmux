@@ -102,15 +102,55 @@ program
 program
   .command('tmux-start')
   .description('Start tmux session for AgentMux')
-  .action(() => {
+  .option('-a, --attach', 'Auto-attach to tmux after starting')
+  .action((options: any) => {
     if (!checkTmux()) return;
-    
+
     const session = getSessionName();
     ensureSession();
-    
+
     console.log(chalk.green(`✅ tmux session '${session}' ready`));
-    console.log(chalk.gray('\nAttach with: tmux attach -t ' + session));
-    console.log(chalk.gray('Or use: agentmux spawn <agent> <task>'));
+
+    if (options.attach) {
+      console.log(chalk.blue('\n🔗 Attaching to tmux...'));
+      console.log(chalk.gray('   Press Ctrl+B then c to create new window'));
+      console.log(chalk.gray('   Press Ctrl+B then n/p to switch windows'));
+      console.log(chalk.gray('   Press Ctrl+B then d to detach\n'));
+      spawn('tmux', ['attach', '-t', session], { stdio: 'inherit' });
+    } else {
+      console.log(chalk.yellow('\n👀 To see your agents, run:'));
+      console.log(chalk.white('   tmux attach -t ' + session));
+      console.log(chalk.gray('\nOr spawn an agent:'));
+      console.log(chalk.gray('   agentmux spawn kimi "Your task"'));
+    }
+  });
+
+program
+  .command('attach')
+  .description('Attach to the AgentMux tmux session')
+  .action(() => {
+    if (!checkTmux()) return;
+
+    const session = getSessionName();
+    console.log(chalk.blue(`🔗 Attaching to tmux session: ${session}`));
+    console.log(chalk.gray('Press Ctrl+B then d to detach\n'));
+    spawn('tmux', ['attach', '-t', session], { stdio: 'inherit' });
+  });
+
+program
+  .command('windows')
+  .description('List all tmux windows')
+  .action(() => {
+    if (!checkTmux()) return;
+
+    const session = getSessionName();
+    try {
+      const output = exec(`tmux list-windows -t ${session} -F "#I: #W"`);
+      console.log(chalk.blue(`\n📋 Windows in ${session}:\n`));
+      console.log(output || chalk.gray('  No windows yet'));
+    } catch {
+      console.log(chalk.red(`❌ No tmux session. Run: agentmux tmux-start`));
+    }
   });
 
 program
@@ -164,7 +204,8 @@ program
     
     console.log(chalk.green(`✅ Spawned ${agent} in tmux window`));
     console.log(chalk.gray(`   Task: ${taskStr}`));
-    console.log(chalk.gray(`   Switch: tmux select-window -t ${session}:${windowName}`));
+    console.log(chalk.yellow(`\n👀 To see it, run: tmux attach -t ${session}`));
+    console.log(chalk.gray(`   Then press Ctrl+B, then ${windowName === 'kimi' ? '2' : windowName === 'minimax' ? '3' : windowName === 'claude' ? '4' : 'window number'} to switch to ${agent}`));
   });
 
 program
