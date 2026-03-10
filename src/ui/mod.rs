@@ -170,9 +170,11 @@ impl App {
                 self.input_buffer.clear();
             }
             KeyCode::Enter => {
-                let agents = self.agent_manager.get_agents();
-                if let Some(agent) = agents.get(self.active_agent) {
-                    let _ = self.agent_manager.send_input(&agent.name, &self.input_buffer);
+                let agent_name = self.agent_manager.get_agents()
+                    .get(self.active_agent)
+                    .map(|a| a.name.clone());
+                if let Some(name) = agent_name {
+                    let _ = self.agent_manager.send_input(&name, &self.input_buffer);
                 }
                 self.input_buffer.clear();
                 self.input_mode = InputMode::Normal;
@@ -298,7 +300,7 @@ impl App {
         let files = self.shared_context.list_files().unwrap_or_default();
         
         let mut text = Text::from(vec![
-            Line::from("Shared Context").style(Style::default().add_modifier(Modifier::BOLD)),
+            Line::from(vec![Span::styled("Shared Context", Style::default().add_modifier(Modifier::BOLD))]),
             Line::from(""),
         ]);
         
@@ -308,7 +310,7 @@ impl App {
         
         if !self.notifications.is_empty() {
             text.lines.push(Line::from(""));
-            text.lines.push(Line::from("Notifications:").style(Style::default().add_modifier(Modifier::BOLD)));
+            text.lines.push(Line::from(vec![Span::styled("Notifications:", Style::default().add_modifier(Modifier::BOLD))]));
             for notif in self.notifications.iter().rev().take(3) {
                 text.lines.push(Line::from(format!("  • {}", notif)));
             }
@@ -355,7 +357,7 @@ impl App {
         frame.render_widget(Clear, area);
         
         let help_text = Text::from(vec![
-            Line::from("Keyboard Shortcuts").style(Style::default().add_modifier(Modifier::BOLD)),
+            Line::from(vec![Span::styled("Keyboard Shortcuts", Style::default().add_modifier(Modifier::BOLD))]),
             Line::from(""),
             Line::from("Tab / n      Next agent"),
             Line::from("Shift+Tab / p Previous agent"),
@@ -366,7 +368,7 @@ impl App {
             Line::from("?            Toggle help"),
             Line::from("q            Quit"),
             Line::from(""),
-            Line::from("Press ? to close").style(Style::default().fg(Color::Gray)),
+            Line::from(vec![Span::styled("Press ? to close", Style::default().fg(Color::Gray))]),
         ]);
         
         let help = Paragraph::new(help_text)
