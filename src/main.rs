@@ -1,19 +1,23 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-
+use std::path::PathBuf;
 
 mod agents;
+mod app;
 mod context;
+mod ghostty;
+mod ipc;
+mod jj;
 mod skills;
+mod tabs;
 mod terminal;
-mod ui;
 
-use ui::App;
+use app::App;
 
 #[derive(Parser)]
 #[command(name = "agentmux")]
 #[command(about = "🌊 Minimal terminal multiplexer for AI agent collaboration")]
-#[command(version = "0.1.0")]
+#[command(version = "0.2.0")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -31,10 +35,39 @@ enum Commands {
     Config,
     /// Start AgentMux with all agents
     Start,
+    /// Send a message to an agent
+    Send {
+        /// Agent name
+        agent: String,
+        /// Message to send
+        message: String,
+    },
+    /// Switch to an agent tab
+    Switch {
+        /// Agent name
+        agent: String,
+    },
+    /// JJ commands
+    Jj {
+        #[command(subcommand)]
+        action: JjCommands,
+    },
     /// Manage skills
     Skills {
         #[command(subcommand)]
         action: SkillCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum JjCommands {
+    /// Show JJ status
+    Status,
+    /// List changes
+    Log,
+    /// Create new change for agent
+    New {
+        agent: String,
     },
 }
 
@@ -62,6 +95,19 @@ async fn main() -> Result<()> {
         Commands::Start => {
             start_agentmux().await?;
         }
+        Commands::Send { agent, message } => {
+            send_to_agent(agent, message).await?;
+        }
+        Commands::Switch { agent } => {
+            switch_to_agent(agent).await?;
+        }
+        Commands::Jj { action } => {
+            match action {
+                JjCommands::Status => jj_status().await?,
+                JjCommands::Log => jj_log().await?,
+                JjCommands::New { agent } => jj_new(agent).await?,
+            }
+        }
         Commands::Skills { action } => {
             match action {
                 SkillCommands::List => {
@@ -85,45 +131,66 @@ async fn init_project(name: String) -> Result<()> {
     let shared_dir = agentmux_dir.join("shared").join(&name);
     let skills_dir = agentmux_dir.join("skills");
     let config_file = agentmux_dir.join("config.toml");
+    let project_dir = agentmux_dir.join("projects").join(&name);
     
-    println!("🌊 Initializing AgentMux project: {}", name);
+    println!("🌊 Initializing AgentMux v2 project: {}", name);
     
     // Create directories
     std::fs::create_dir_all(&agentmux_dir)?;
     std::fs::create_dir_all(&shared_dir)?;
     std::fs::create_dir_all(&skills_dir)?;
+    std::fs::create_dir_all(&project_dir)?;
+    
+    // Initialize JJ repo
+    let repo_dir = project_dir.join("repo");
+    std::fs::create_dir_all(&repo_dir)?;
+    
+    // Run jj init
+    std::process::Command::new("jj")
+        .args(&["init", "--git-repo", "."])
+        .current_dir(&repo_dir)
+        .output()?;
     
     // Create default config
-    let config = format!(r#"version = "0.1.0"
+    let config = format!(r#"version = "0.2.0"
 
 [project]
 name = "{}"
 working_dir = "{}"
+repo_dir = "{}"
 
 [[agents]]
-name = "kimi-planner"
+id = "kimi"
+name = "Kimi Planner"
 type = "opencode"
 provider = "kimi"
 model = "kimi-k2.5"
+command = "opencode"
+args = ["run", "--provider", "kimi", "--model", "kimi-k2.5", "-c"]
 enabled = true
 
 [[agents]]
-name = "minimax-coder"
+id = "minimax"
+name = "MiniMax Coder"
 type = "opencode"
 provider = "minimax"
 model = "MiniMax-M2.5"
+command = "opencode"
+args = ["run", "--provider", "minimax", "--model", "MiniMax-M2.5", "-c"]
 enabled = true
 
 [[agents]]
-name = "opus-reviewer"
+id = "claude"
+name = "Claude Reviewer"
 type = "claude"
-model = "claude-opus"
+command = "claude"
+args = ["--dangerously-skip-permissions", "-c"]
 enabled = true
 
 [shared]
 auto_sync = true
 notify_on_change = true
-"#, name, std::env::current_dir()?.display());
+"#, name, std::env::current_dir()?.display(), repo_dir.display());
     
     std::fs::write(&config_file, config)?;
     
@@ -133,7 +200,7 @@ notify_on_change = true
     std::fs::write(shared_dir.join("progress.md"), "# Progress\n\n*No progress yet*\n")?;
     std::fs::write(shared_dir.join("mentions.md"), "# Mentions\n\n*No mentions yet*\n")?;
     
-    println!("✅ Project initialized!");
+    println!("✅ Project initialized with JJ!");
     println!();
     println!("Next steps:");
     println!("  1. Configure API keys: agentmux config");
@@ -153,6 +220,15 @@ async fn show_config() -> Result<()> {
     println!("Config directory: {}", agentmux_dir.display());
     println!("Shared context: {}", agentmux_dir.join("shared").display());
     
+    // Check for JJ
+    match which::which("jj") {
+        Ok(path) => println!("✅ Jujutsu: {}", path.display()),
+        Err(_) => {
+            println!("❌ Jujutsu not found. Install with:");
+            println!("   cargo install jj-cli");
+        }
+    }
+    
     // Check for opencode
     match which::which("opencode") {
         Ok(path) => println!("✅ OpenCode: {}", path.display()),
@@ -167,7 +243,7 @@ async fn show_config() -> Result<()> {
         Ok(path) => println!("✅ Claude Code: {}", path.display()),
         Err(_) => {
             println!("❌ Claude Code not found. Install with:");
-            println!("   npm install -g @anthropic-ai/claude-code");
+        println!("   npm install -g @anthropic-ai/claude-code");
         }
     }
     
@@ -189,18 +265,81 @@ async fn start_agentmux() -> Result<()> {
     let config_str = std::fs::read_to_string(&config_file)?;
     let config: crate::agents::Config = toml::from_str(&config_str)?;
     
-    println!("🌊 Starting AgentMux: {}", config.project.name);
+    println!("🌊 Starting AgentMux v2: {}", config.project.name);
     
-    // Start UI
-    let mut app = App::new(config).await?;
-    app.run().await?;
+    // Start IPC server in background
+    let ipc_server = ipc::server::Server::new();
+    tokio::spawn(async move {
+        if let Err(e) = ipc_server.run().await {
+            eprintln!("IPC server error: {}", e);
+        }
+    });
     
+    // Create app
+    let repo_dir = PathBuf::from(&config.project.repo_dir);
+    let mut app = App::new(config.project.name.clone(), repo_dir)?;
+    
+    // Add agents
+    for agent in &config.agents {
+        if agent.enabled {
+            println!("  → Starting {}...", agent.name);
+            app.add_agent(
+                agent.id.clone(),
+                agent.name.clone(),
+                agent.agent_type.clone(),
+                agent.command.clone(),
+                agent.args.clone(),
+            )?;
+        }
+    }
+    
+    // Run the app
+    app.run()?;
+    
+    Ok(())
+}
+
+async fn send_to_agent(agent: String, message: String) -> Result<()> {
+    // Send message via IPC socket
+    ipc::client::send_message(&agent, &message).await
+}
+
+async fn switch_to_agent(agent: String) -> Result<()> {
+    // Switch to agent via IPC socket
+    ipc::client::switch_tab(&agent).await
+}
+
+async fn jj_status() -> Result<()> {
+    let output = std::process::Command::new("jj")
+        .args(&["status"])
+        .output()?;
+    
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+async fn jj_log() -> Result<()> {
+    let output = std::process::Command::new("jj")
+        .args(&["log"])
+        .output()?;
+    
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+async fn jj_new(agent: String) -> Result<()> {
+    let output = std::process::Command::new("jj")
+        .args(&["new", "-m", &format!("@{} workspace", agent)])
+        .output()?;
+    
+    println!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 
 async fn list_skills() -> Result<()> {
     println!("📦 Available Skills:");
     println!("  - shared-context-writer: Write to shared context");
+    println!("  - jj-workflow: Jujutsu workflow for agents");
     println!("  - agent-coordinator: Coordinate between agents");
     println!("  - progress-tracker: Track work progress");
     Ok(())
@@ -231,6 +370,23 @@ description = "Write updates to shared context for other agents to see"
     std::fs::write(
         scw_dir.join("prompt.md"),
         include_str!("../skills/shared-context-writer/prompt.md"),
+    )?;
+    
+    // Install jj-workflow skill
+    let jj_dir = skills_dir.join("jj-workflow");
+    std::fs::create_dir_all(&jj_dir)?;
+    
+    std::fs::write(
+        jj_dir.join("skill.toml"),
+        r#"name = "jj-workflow"
+version = "1.0.0"
+description = "Jujutsu workflow for multi-agent collaboration"
+"#,
+    )?;
+    
+    std::fs::write(
+        jj_dir.join("prompt.md"),
+        include_str!("../skills/jj-workflow/prompt.md"),
     )?;
     
     println!("✅ Skills installed to: {}", skills_dir.display());

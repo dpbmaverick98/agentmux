@@ -17,16 +17,20 @@ pub struct Config {
 pub struct ProjectConfig {
     pub name: String,
     pub working_dir: String,
+    pub repo_dir: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
+    pub id: String,
     pub name: String,
     #[serde(rename = "type")]
     pub agent_type: String,
     pub provider: Option<String>,
     pub model: Option<String>,
     pub enabled: bool,
+    pub command: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
