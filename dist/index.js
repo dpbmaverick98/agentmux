@@ -2410,6 +2410,41 @@ function ensureSession() {
   }
 }
 program2.name("agentmux").description("Ultra-lean multi-agent terminal multiplexer").version("3.0.0");
+program2.command("install").description("Install required dependencies (jj, tmux)").action(() => {
+  console.log(source_default.blue(`\uD83D\uDD27 Installing AgentMux dependencies...
+`));
+  const platform = process.platform;
+  let installCmd = "";
+  if (platform === "darwin") {
+    console.log(source_default.gray("Detected macOS"));
+    installCmd = "brew install jj tmux";
+  } else if (platform === "linux") {
+    console.log(source_default.gray("Detected Linux"));
+    installCmd = "cargo install jj-cli && sudo apt-get install -y tmux";
+  } else {
+    console.log(source_default.yellow("\u26A0\uFE0F  Unsupported platform. Please install manually:"));
+    console.log(source_default.white("   JJ: cargo install jj-cli"));
+    console.log(source_default.white("   tmux: https://github.com/tmux/tmux/wiki/Installing"));
+    return;
+  }
+  console.log(source_default.cyan(`Running: ${installCmd}
+`));
+  try {
+    execSync(installCmd, { stdio: "inherit" });
+    console.log(source_default.green(`
+\u2705 Dependencies installed!`));
+    console.log(source_default.gray(`
+You can now run:`));
+    console.log(source_default.white("   agentmux init <project>"));
+    console.log(source_default.white("   agentmux start"));
+  } catch (e) {
+    console.log(source_default.red(`
+\u274C Installation failed`));
+    console.log(source_default.gray("Try installing manually:"));
+    console.log(source_default.white("   JJ: cargo install jj-cli"));
+    console.log(source_default.white("   tmux: brew install tmux (macOS) or apt-get install tmux (Linux)"));
+  }
+});
 program2.command("init <name>").description("Initialize a new AgentMux project").action((name) => {
   console.log(source_default.blue(`\uD83C\uDF0A Initializing AgentMux project: ${name}`));
   const projectDir = path.join(AGENTMUX_DIR, "projects", name);
@@ -2456,8 +2491,15 @@ Next steps:`));
   console.log(source_default.white(`  2. agentmux start    ${source_default.gray("\u2190 One command to start everything")}`));
 });
 program2.command("start").description("Start full AgentMux environment with 4 windows").option("--kimi", "Enable kimi agent", true).option("--minimax", "Enable minimax agent", true).option("--claude", "Enable claude agent", true).action((options) => {
-  if (!checkTmux())
+  const hasTmux = checkTmux();
+  const hasJJ = checkJJ();
+  if (!hasTmux || !hasJJ) {
+    console.log(source_default.red(`
+\u274C Missing dependencies!`));
+    console.log(source_default.white(`Run: agentmux install
+`));
     return;
+  }
   const session = getSessionName();
   const projectName = path.basename(process.cwd());
   console.log(source_default.blue(`\uD83C\uDF0A Starting AgentMux environment...

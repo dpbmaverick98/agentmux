@@ -63,6 +63,46 @@ program
   .version('3.0.0');
 
 program
+  .command('install')
+  .description('Install required dependencies (jj, tmux)')
+  .action(() => {
+    console.log(chalk.blue('🔧 Installing AgentMux dependencies...\n'));
+
+    const platform = process.platform;
+    let installCmd = '';
+
+    if (platform === 'darwin') {
+      // macOS
+      console.log(chalk.gray('Detected macOS'));
+      installCmd = 'brew install jj tmux';
+    } else if (platform === 'linux') {
+      // Linux
+      console.log(chalk.gray('Detected Linux'));
+      installCmd = 'cargo install jj-cli && sudo apt-get install -y tmux';
+    } else {
+      console.log(chalk.yellow('⚠️  Unsupported platform. Please install manually:'));
+      console.log(chalk.white('   JJ: cargo install jj-cli'));
+      console.log(chalk.white('   tmux: https://github.com/tmux/tmux/wiki/Installing'));
+      return;
+    }
+
+    console.log(chalk.cyan(`Running: ${installCmd}\n`));
+
+    try {
+      execSync(installCmd, { stdio: 'inherit' });
+      console.log(chalk.green('\n✅ Dependencies installed!'));
+      console.log(chalk.gray('\nYou can now run:'));
+      console.log(chalk.white('   agentmux init <project>'));
+      console.log(chalk.white('   agentmux start'));
+    } catch (e) {
+      console.log(chalk.red('\n❌ Installation failed'));
+      console.log(chalk.gray('Try installing manually:'));
+      console.log(chalk.white('   JJ: cargo install jj-cli'));
+      console.log(chalk.white('   tmux: brew install tmux (macOS) or apt-get install tmux (Linux)'));
+    }
+  });
+
+program
   .command('init <name>')
   .description('Initialize a new AgentMux project')
   .action((name: string) => {
@@ -121,7 +161,15 @@ program
   .option('--minimax', 'Enable minimax agent', true)
   .option('--claude', 'Enable claude agent', true)
   .action((options: any) => {
-    if (!checkTmux()) return;
+    // Check all dependencies first
+    const hasTmux = checkTmux();
+    const hasJJ = checkJJ();
+
+    if (!hasTmux || !hasJJ) {
+      console.log(chalk.red('\n❌ Missing dependencies!'));
+      console.log(chalk.white('Run: agentmux install\n'));
+      return;
+    }
 
     const session = getSessionName();
     const projectName = path.basename(process.cwd());
