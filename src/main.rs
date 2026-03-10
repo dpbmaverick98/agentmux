@@ -260,18 +260,28 @@ async fn start_agentmux() -> Result<()> {
         .expect("Could not find home directory")
         .join(".agentmux")
         .join("config.toml");
-    
+
     if !config_file.exists() {
         eprintln!("❌ No AgentMux project found. Run: agentmux init");
         std::process::exit(1);
     }
-    
+
     // Load config
     let config_str = std::fs::read_to_string(&config_file)?;
     let config: crate::agents::Config = toml::from_str(&config_str)?;
-    
+
     println!("🌊 Starting AgentMux v2: {}", config.project.name);
-    
+
+    // Check if agents are available
+    let opencode_available = which::which("opencode").is_ok();
+    let claude_available = which::which("claude").is_ok();
+
+    if !opencode_available && !claude_available {
+        println!("  ⚠️  No AI agents found (opencode or claude)");
+        println!("  🧪 Starting in DEMO mode with bash shells...");
+        println!("  (Install opencode: curl -fsSL https://opencode.ai/install | bash)");
+    }
+
     // Start IPC server in background
     let ipc_server = ipc::server::Server::new();
     tokio::spawn(async move {
@@ -279,28 +289,52 @@ async fn start_agentmux() -> Result<()> {
             eprintln!("IPC server error: {}", e);
         }
     });
-    
+
     // Create app
     let repo_dir = PathBuf::from(&config.project.repo_dir);
     let mut app = App::new(config.project.name.clone(), repo_dir)?;
-    
-    // Add agents
+
+    // Add agents (with fallback to demo mode)
+    let mut agents_started = 0;
     for agent in &config.agents {
         if agent.enabled {
-            println!("  → Starting {}...", agent.name);
-            app.add_agent(
+            // Check if command is available
+            let cmd_available = which::which(&agent.command).is_ok();
+
+            let (cmd, args) = if cmd_available {
+                println!("  → Starting {}...", agent.name);
+                (agent.command.clone(), agent.args.clone())
+            } else {
+                println!("  → Starting {} (demo mode with bash)...", agent.name);
+                ("bash".to_string(), vec![])
+            };
+
+            match app.add_agent(
                 agent.id.clone(),
                 agent.name.clone(),
                 agent.agent_type.clone(),
-                agent.command.clone(),
-                agent.args.clone(),
-            )?;
+                cmd,
+                args,
+            ) {
+                Ok(()) => agents_started += 1,
+                Err(e) => {
+                    eprintln!("  ❌ Failed to start {}: {}", agent.name, e);
+                }
+            }
         }
     }
-    
+
+    if agents_started == 0 {
+        eprintln!("❌ No agents could be started. Exiting.");
+        std::process::exit(1);
+    }
+
+    println!("  ✅ Started {} agent(s)", agents_started);
+    println!("  💡 Press Cmd+H for help, Cmd+Q to quit\n");
+
     // Run the app
     app.run()?;
-    
+
     Ok(())
 }
 
