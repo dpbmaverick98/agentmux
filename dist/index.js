@@ -2527,29 +2527,23 @@ program2.command("start").description("Start full AgentMux environment with 4 wi
   if (options.kimi) {
     console.log(source_default.gray("Starting kimi..."));
     execSync(`tmux select-pane -t ${session}:0.1`);
-    const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${process.cwd()} opencode run --provider kimi --model kimi-k2.5 -c`;
+    execSync(`tmux send-keys -t ${session}:0.1 "clear" C-m`);
+    const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${process.cwd()} opencode`;
     execSync(`tmux send-keys -t ${session}:0.1 "${kimiCmd}" C-m`);
-    setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:0.1 "clear && echo '\uD83D\uDC4B KIMI - Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working'" C-m`);
-    }, 2000);
   }
   if (options.minimax) {
     console.log(source_default.gray("Starting minimax..."));
     execSync(`tmux select-pane -t ${session}:0.2`);
-    const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${process.cwd()} opencode run --provider minimax --model MiniMax-M2.5 -c`;
+    execSync(`tmux send-keys -t ${session}:0.2 "clear" C-m`);
+    const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${process.cwd()} opencode`;
     execSync(`tmux send-keys -t ${session}:0.2 "${minimaxCmd}" C-m`);
-    setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:0.2 "clear && echo '\uD83D\uDC4B MINIMAX - Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working'" C-m`);
-    }, 2000);
   }
   if (options.claude) {
     console.log(source_default.gray("Starting claude..."));
     execSync(`tmux select-pane -t ${session}:0.3`);
-    const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${process.cwd()} claude --dangerously-skip-permissions -c`;
+    execSync(`tmux send-keys -t ${session}:0.3 "clear" C-m`);
+    const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${process.cwd()} claude`;
     execSync(`tmux send-keys -t ${session}:0.3 "${claudeCmd}" C-m`);
-    setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:0.3 "clear && echo '\uD83D\uDC4B CLAUDE - Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working'" C-m`);
-    }, 2000);
   }
   execSync(`tmux select-layout -t ${session} tiled`);
   console.log(source_default.green(`
@@ -2628,8 +2622,7 @@ program2.command("spawn <agent> [task...]").description("Spawn an AI agent in a 
   if (agent === "claude") {
     cmd = "claude --dangerously-skip-permissions -c";
   } else {
-    const provider = options.provider || "kimi";
-    cmd = `opencode run --provider ${provider} --model ${provider === "kimi" ? "kimi-k2.5" : "MiniMax-M2.5"} -c`;
+    cmd = `opencode`;
   }
   const windowName = agent.toLowerCase();
   try {
