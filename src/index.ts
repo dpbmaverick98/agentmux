@@ -71,8 +71,18 @@ program
     const projectDir = path.join(AGENTMUX_DIR, 'projects', name);
     fs.mkdirSync(projectDir, { recursive: true });
     
+    // Check and suggest jj installation
+    const hasJJ = checkJJ();
+    if (!hasJJ) {
+      console.log(chalk.yellow('\n⚠️  IMPORTANT: JJ not found!'));
+      console.log(chalk.white('   JJ is required for version control. Install with:'));
+      console.log(chalk.cyan('   cargo install jj-cli'));
+      console.log(chalk.gray('   or'));
+      console.log(chalk.cyan('   brew install jj\n'));
+    }
+    
     // Initialize JJ repo
-    if (checkJJ()) {
+    if (hasJJ) {
       try {
         execSync('jj init', { cwd: projectDir });
         console.log(chalk.green('  ✓ JJ repository initialized'));
@@ -93,10 +103,94 @@ program
     fs.writeFileSync(path.join(sharedDir, 'messages.txt'), '# Messages\n\n');
     
     console.log(chalk.green('✅ Project initialized!'));
+    
+    if (!hasJJ) {
+      console.log(chalk.yellow('\n⚠️  Install JJ before starting:'));
+      console.log(chalk.cyan('   cargo install jj-cli'));
+    }
+    
     console.log(chalk.gray(`\nNext steps:`));
     console.log(chalk.gray(`  1. cd ${projectDir}`));
-    console.log(chalk.gray(`  2. agentmux tmux-start`));
-    console.log(chalk.gray(`  3. agentmux spawn kimi "Your task"`));
+    console.log(chalk.white(`  2. agentmux start    ${chalk.gray('← One command to start everything')}`));
+  });
+
+program
+  .command('start')
+  .description('Start full AgentMux environment with 4 windows')
+  .option('--kimi', 'Enable kimi agent', true)
+  .option('--minimax', 'Enable minimax agent', true)
+  .option('--claude', 'Enable claude agent', true)
+  .action((options: any) => {
+    if (!checkTmux()) return;
+
+    const session = getSessionName();
+    const projectName = path.basename(process.cwd());
+
+    console.log(chalk.blue('🌊 Starting AgentMux environment...\n'));
+
+    // Kill existing session if present
+    try {
+      execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+    } catch {}
+
+    // Create new session with 4 windows
+    console.log(chalk.gray('Creating tmux session...'));
+    execSync(`tmux new-session -d -s ${session} -n status`);
+
+    // Window 1: kimi (opencode with kimi provider)
+    if (options.kimi) {
+      console.log(chalk.gray('Spawning kimi...'));
+      execSync(`tmux new-window -t ${session} -n kimi`);
+      const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${process.cwd()} opencode run --provider kimi --model kimi-k2.5 -c`;
+      execSync(`tmux send-keys -t ${session}:kimi "${kimiCmd}" C-m`);
+      setTimeout(() => {
+        execSync(`tmux send-keys -t ${session}:kimi "clear && echo '👋 Welcome kimi! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+      }, 2000);
+    }
+
+    // Window 2: minimax (opencode with minimax provider)
+    if (options.minimax) {
+      console.log(chalk.gray('Spawning minimax...'));
+      execSync(`tmux new-window -t ${session} -n minimax`);
+      const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${process.cwd()} opencode run --provider minimax --model MiniMax-M2.5 -c`;
+      execSync(`tmux send-keys -t ${session}:minimax "${minimaxCmd}" C-m`);
+      setTimeout(() => {
+        execSync(`tmux send-keys -t ${session}:minimax "clear && echo '👋 Welcome minimax! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+      }, 2000);
+    }
+
+    // Window 3: claude
+    if (options.claude) {
+      console.log(chalk.gray('Spawning claude...'));
+      execSync(`tmux new-window -t ${session} -n claude`);
+      const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${process.cwd()} claude --dangerously-skip-permissions -c`;
+      execSync(`tmux send-keys -t ${session}:claude "${claudeCmd}" C-m`);
+      setTimeout(() => {
+        execSync(`tmux send-keys -t ${session}:claude "clear && echo '👋 Welcome claude! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+      }, 2000);
+    }
+
+    // Window 4: Status (current window, will show status)
+    console.log(chalk.gray('Setting up status window...'));
+    execSync(`tmux send-keys -t ${session}:status "clear" C-m`);
+    setTimeout(() => {
+      execSync(`tmux send-keys -t ${session}:status "${process.argv[0]} ${process.argv[1]} status" C-m`);
+    }, 500);
+
+    console.log(chalk.green('\n✅ AgentMux environment ready!'));
+    console.log(chalk.yellow('\n🖥️  Layout:'));
+    console.log(chalk.white('   Window 1 (status): AgentMux status monitor'));
+    if (options.kimi) console.log(chalk.white('   Window 2 (kimi): opencode with kimi'));
+    if (options.minimax) console.log(chalk.white('   Window 3 (minimax): opencode with minimax'));
+    if (options.claude) console.log(chalk.white('   Window 4 (claude): claude code'));
+
+    console.log(chalk.blue('\n🔗 Attaching now...'));
+    console.log(chalk.gray('   Ctrl+B + 1-4: Switch windows'));
+    console.log(chalk.gray('   Ctrl+B + d: Detach (keep running in background)'));
+    console.log(chalk.gray('   Ctrl+B + &: Kill window\n'));
+
+    // Auto-attach
+    spawn('tmux', ['attach', '-t', session], { stdio: 'inherit' });
   });
 
 program

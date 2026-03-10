@@ -2414,7 +2414,17 @@ program2.command("init <name>").description("Initialize a new AgentMux project")
   console.log(source_default.blue(`\uD83C\uDF0A Initializing AgentMux project: ${name}`));
   const projectDir = path.join(AGENTMUX_DIR, "projects", name);
   fs.mkdirSync(projectDir, { recursive: true });
-  if (checkJJ()) {
+  const hasJJ = checkJJ();
+  if (!hasJJ) {
+    console.log(source_default.yellow(`
+\u26A0\uFE0F  IMPORTANT: JJ not found!`));
+    console.log(source_default.white("   JJ is required for version control. Install with:"));
+    console.log(source_default.cyan("   cargo install jj-cli"));
+    console.log(source_default.gray("   or"));
+    console.log(source_default.cyan(`   brew install jj
+`));
+  }
+  if (hasJJ) {
     try {
       execSync("jj init", { cwd: projectDir });
       console.log(source_default.green("  \u2713 JJ repository initialized"));
@@ -2435,11 +2445,78 @@ Add your multi-agent plan here.
 
 `);
   console.log(source_default.green("\u2705 Project initialized!"));
+  if (!hasJJ) {
+    console.log(source_default.yellow(`
+\u26A0\uFE0F  Install JJ before starting:`));
+    console.log(source_default.cyan("   cargo install jj-cli"));
+  }
   console.log(source_default.gray(`
 Next steps:`));
   console.log(source_default.gray(`  1. cd ${projectDir}`));
-  console.log(source_default.gray(`  2. agentmux tmux-start`));
-  console.log(source_default.gray(`  3. agentmux spawn kimi "Your task"`));
+  console.log(source_default.white(`  2. agentmux start    ${source_default.gray("\u2190 One command to start everything")}`));
+});
+program2.command("start").description("Start full AgentMux environment with 4 windows").option("--kimi", "Enable kimi agent", true).option("--minimax", "Enable minimax agent", true).option("--claude", "Enable claude agent", true).action((options) => {
+  if (!checkTmux())
+    return;
+  const session = getSessionName();
+  const projectName = path.basename(process.cwd());
+  console.log(source_default.blue(`\uD83C\uDF0A Starting AgentMux environment...
+`));
+  try {
+    execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+  } catch {}
+  console.log(source_default.gray("Creating tmux session..."));
+  execSync(`tmux new-session -d -s ${session} -n status`);
+  if (options.kimi) {
+    console.log(source_default.gray("Spawning kimi..."));
+    execSync(`tmux new-window -t ${session} -n kimi`);
+    const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${process.cwd()} opencode run --provider kimi --model kimi-k2.5 -c`;
+    execSync(`tmux send-keys -t ${session}:kimi "${kimiCmd}" C-m`);
+    setTimeout(() => {
+      execSync(`tmux send-keys -t ${session}:kimi "clear && echo '\uD83D\uDC4B Welcome kimi! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+    }, 2000);
+  }
+  if (options.minimax) {
+    console.log(source_default.gray("Spawning minimax..."));
+    execSync(`tmux new-window -t ${session} -n minimax`);
+    const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${process.cwd()} opencode run --provider minimax --model MiniMax-M2.5 -c`;
+    execSync(`tmux send-keys -t ${session}:minimax "${minimaxCmd}" C-m`);
+    setTimeout(() => {
+      execSync(`tmux send-keys -t ${session}:minimax "clear && echo '\uD83D\uDC4B Welcome minimax! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+    }, 2000);
+  }
+  if (options.claude) {
+    console.log(source_default.gray("Spawning claude..."));
+    execSync(`tmux new-window -t ${session} -n claude`);
+    const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${process.cwd()} claude --dangerously-skip-permissions -c`;
+    execSync(`tmux send-keys -t ${session}:claude "${claudeCmd}" C-m`);
+    setTimeout(() => {
+      execSync(`tmux send-keys -t ${session}:claude "clear && echo '\uD83D\uDC4B Welcome claude! Check: cat ~/.agentmux/skills/agentmux.md' && echo 'Task: Start working on your assigned task'" C-m`);
+    }, 2000);
+  }
+  console.log(source_default.gray("Setting up status window..."));
+  execSync(`tmux send-keys -t ${session}:status "clear" C-m`);
+  setTimeout(() => {
+    execSync(`tmux send-keys -t ${session}:status "${process.argv[0]} ${process.argv[1]} status" C-m`);
+  }, 500);
+  console.log(source_default.green(`
+\u2705 AgentMux environment ready!`));
+  console.log(source_default.yellow(`
+\uD83D\uDDA5\uFE0F  Layout:`));
+  console.log(source_default.white("   Window 1 (status): AgentMux status monitor"));
+  if (options.kimi)
+    console.log(source_default.white("   Window 2 (kimi): opencode with kimi"));
+  if (options.minimax)
+    console.log(source_default.white("   Window 3 (minimax): opencode with minimax"));
+  if (options.claude)
+    console.log(source_default.white("   Window 4 (claude): claude code"));
+  console.log(source_default.blue(`
+\uD83D\uDD17 Attaching now...`));
+  console.log(source_default.gray("   Ctrl+B + 1-4: Switch windows"));
+  console.log(source_default.gray("   Ctrl+B + d: Detach (keep running in background)"));
+  console.log(source_default.gray(`   Ctrl+B + &: Kill window
+`));
+  spawn("tmux", ["attach", "-t", session], { stdio: "inherit" });
 });
 program2.command("tmux-start").description("Start tmux session for AgentMux").option("-a, --attach", "Auto-attach to tmux after starting").action((options) => {
   if (!checkTmux())
