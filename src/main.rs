@@ -11,6 +11,7 @@ mod jj;
 mod skills;
 mod tabs;
 mod terminal;
+mod watcher;
 
 use app::App;
 

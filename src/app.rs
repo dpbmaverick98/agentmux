@@ -16,27 +16,55 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::jj;
 use crate::tabs::{AgentConfig, TabManager};
+use crate::watcher::{FileWatcher, Message, MessageParser};
 
 pub struct App {
     tab_manager: TabManager,
+    file_watcher: FileWatcher,
+    shared_dir: PathBuf,
     should_quit: bool,
     show_help: bool,
     sidebar_visible: bool,
     project_name: String,
+    messages: Vec<Message>,
+    conflicts: Vec<Conflict>,
+    last_mentions_content: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Conflict {
+    pub file: String,
+    pub agents: Vec<String>,
+    pub assigned_to: Option<String>,
 }
 
 impl App {
     pub fn new(project_name: String, working_dir: PathBuf) -> Result<Self> {
-        // Initialize with default size (will be updated on first render)
+        let shared_dir = dirs::home_dir()
+            .expect("Could not find home directory")
+            .join(".agentmux")
+            .join("shared")
+            .join(&project_name);
+
+        // Initialize file watcher
+        let file_watcher = FileWatcher::new(shared_dir.clone())?;
+
+        // Initialize with default size
         let tab_manager = TabManager::new(working_dir, 24, 80);
 
         Ok(Self {
             tab_manager,
+            file_watcher,
+            shared_dir,
             should_quit: false,
             show_help: false,
             sidebar_visible: true,
             project_name,
+            messages: Vec::new(),
+            conflicts: Vec::new(),
+            last_mentions_content: String::new(),
         })
     }
 
@@ -61,6 +89,73 @@ impl App {
         self.tab_manager.create_tab(id, name, config)
     }
 
+    fn check_file_updates(&mut self) {
+        // Check for file changes
+        let changed_files = self.file_watcher.check_events();
+
+        for path in changed_files {
+            if let Some(filename) = path.file_name() {
+                let filename = filename.to_string_lossy();
+
+                if filename == "mentions.md" {
+                    self.update_messages();
+                }
+            }
+        }
+
+        // Also check for conflicts periodically
+        self.check_conflicts();
+    }
+
+    fn update_messages(&mut self) {
+        let mentions_path = self.shared_dir.join("mentions.md");
+
+        if let Ok(content) = std::fs::read_to_string(&mentions_path) {
+            // Only parse if content changed
+            if content != self.last_mentions_content {
+                self.messages = MessageParser::parse(&content);
+                self.last_mentions_content = content;
+
+                // Increment unread counts for targeted agents
+                for message in &self.messages {
+                    if let Some(tab) = self.tab_manager.get_tab_mut(&message.to) {
+                        if !tab.is_active {
+                            tab.add_unread();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn check_conflicts(&mut self) {
+        // Get repo dir from working dir
+        let repo_dir = self.tab_manager.working_dir().clone();
+
+        match jj::has_conflicts(&repo_dir) {
+            Ok(true) => {
+                match jj::conflicting_files(&repo_dir) {
+                    Ok(files) => {
+                        // Update conflicts list
+                        self.conflicts = files
+                            .into_iter()
+                            .map(|file| Conflict {
+                                file,
+                                agents: vec!["kimi".to_string(), "minimax".to_string()], // Detect from JJ
+                                assigned_to: None,
+                            })
+                            .collect();
+                    }
+                    Err(_) => {}
+                }
+            }
+            Ok(false) => {
+                self.conflicts.clear();
+            }
+            Err(_) => {}
+        }
+    }
+
     pub fn run(&mut self) -> Result<()> {
         // Setup terminal
         enable_raw_mode()?;
@@ -68,6 +163,9 @@ impl App {
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
+
+        // Initial load of messages
+        self.update_messages();
 
         let result = self.run_app(&mut terminal);
 
@@ -90,6 +188,9 @@ impl App {
         while !self.should_quit {
             // Process terminal output from all tabs
             self.tab_manager.process_all_output()?;
+
+            // Check for file updates
+            self.check_file_updates();
 
             // Draw UI
             terminal.draw(|f| self.draw(f))?;
@@ -239,20 +340,62 @@ impl App {
             .borders(Borders::ALL)
             .title(" Shared Context ");
 
-        // Placeholder content
-        let text = Text::from(vec![
-            Line::from("Shared files:"),
-            Line::from("• plan.md"),
-            Line::from("• mentions.md"),
-            Line::from("• progress.md"),
-            Line::from(""),
-            Line::from("Messages:"),
-            Line::from("• @minimax: implement auth"),
-            Line::from(""),
-            Line::from("Conflicts:"),
-            Line::from("• None"),
-        ]);
+        let mut lines = vec![Line::from(vec![Span::styled(
+            "Messages",
+            Style::default().add_modifier(Modifier::BOLD),
+        )])];
 
+        // Show recent messages (last 5)
+        let recent_messages: Vec<&Message> = self.messages.iter().rev().take(5).collect();
+        if recent_messages.is_empty() {
+            lines.push(Line::from("• No messages yet"));
+        } else {
+            for msg in recent_messages {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("@{} → @{}: ", msg.from, msg.to),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                    Span::raw(&msg.text[..msg.text.len().min(30)]),
+                ]));
+            }
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![Span::styled(
+            "Conflicts",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]));
+
+        // Show conflicts
+        if self.conflicts.is_empty() {
+            lines.push(Line::from("• No conflicts"));
+        } else {
+            for conflict in &self.conflicts {
+                let status = if let Some(ref assigned) = conflict.assigned_to {
+                    format!("(assigned to {})", assigned)
+                } else {
+                    "(unassigned)".to_string()
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled("⚠️ ", Style::default().fg(Color::Red)),
+                    Span::styled(&conflict.file, Style::default().fg(Color::Yellow)),
+                    Span::raw(format!(" {}", status)),
+                ]));
+            }
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![Span::styled(
+            "Shared Files",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]));
+        lines.push(Line::from("• plan.md"));
+        lines.push(Line::from("• mentions.md"));
+        lines.push(Line::from("• progress.md"));
+
+        let text = Text::from(lines);
         let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
         frame.render_widget(paragraph, area);

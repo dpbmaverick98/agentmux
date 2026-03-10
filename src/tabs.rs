@@ -238,4 +238,9 @@ impl TabManager {
     pub fn tab_order(&self) -> &[String] {
         &self.tab_order
     }
+
+    /// Get working directory
+    pub fn working_dir(&self) -> &PathBuf {
+        &self.working_dir
+    }
 }
