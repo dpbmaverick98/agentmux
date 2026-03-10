@@ -5,15 +5,11 @@ set -e
 echo "🌊 Installing AgentMux..."
 echo ""
 
-# Detect OS
-OS=$(uname -s)
-ARCH=$(uname -m)
-
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Check for Rust
 if ! command -v rustc &> /dev/null; then
@@ -29,19 +25,15 @@ echo -e "${GREEN}✅ Rust $(rustc --version)${NC}"
 AGENTMUX_DIR="$HOME/.agentmux"
 mkdir -p "$AGENTMUX_DIR"/{shared,skills}
 
-# Clone or download AgentMux
+# Clone from GitHub
 INSTALL_DIR="$AGENTMUX_DIR/app"
 if [ -d "$INSTALL_DIR" ]; then
-    echo "Updating AgentMux..."
+    echo "Updating AgentMux from GitHub..."
     cd "$INSTALL_DIR"
-    git pull 2>/dev/null || echo "Using existing installation"
+    git pull origin master
 else
-    echo "Downloading AgentMux..."
-    git clone https://github.com/dpbmaverick98/agentmux.git "$INSTALL_DIR" 2>/dev/null || {
-        echo "Git clone failed. Please clone manually:"
-        echo "  git clone https://github.com/dpbmaverick98/agentmux.git $INSTALL_DIR"
-        exit 1
-    }
+    echo "Cloning AgentMux from GitHub..."
+    git clone https://github.com/dpbmaverick98/agentmux.git "$INSTALL_DIR"
 fi
 
 cd "$INSTALL_DIR"
@@ -73,7 +65,7 @@ if ! command -v opencode &> /dev/null; then
     echo -e "${YELLOW}📦 OpenCode not found. Installing...${NC}"
     curl -fsSL https://opencode.ai/install | bash
 else
-    echo -e "${GREEN}✅ OpenCode $(opencode --version 2>/dev/null || echo 'installed')${NC}"
+    echo -e "${GREEN}✅ OpenCode installed${NC}"
 fi
 
 # Check for Claude Code
@@ -88,13 +80,11 @@ echo ""
 echo "🔑 Configure your AI providers:"
 echo ""
 
-# Prompt for API keys
 read -p "Kimi API Key (optional, press Enter to skip): " KIMI_KEY
 echo ""
 read -p "MiniMax API Key (optional, press Enter to skip): " MINIMAX_KEY
 echo ""
 
-# Configure OpenCode providers
 mkdir -p "$HOME/.config/opencode/providers"
 
 if [ -n "$KIMI_KEY" ]; then
@@ -121,26 +111,18 @@ EOF
     echo -e "${GREEN}✅ MiniMax configured${NC}"
 fi
 
-# Claude login
 if ! claude auth status &> /dev/null; then
     echo ""
     echo "🔐 Please login to Claude Code:"
     claude auth login
 fi
 
-# Install skills
-echo ""
-echo "📦 Installing default skills..."
-mkdir -p "$AGENTMUX_DIR/skills/shared-context-writer"
-cp "$INSTALL_DIR/skills/shared-context-writer/prompt.md" "$AGENTMUX_DIR/skills/shared-context-writer/"
-cp "$INSTALL_DIR/skills/shared-context-writer/skill.toml" "$AGENTMUX_DIR/skills/shared-context-writer/"
-
 echo ""
 echo -e "${GREEN}🌊 AgentMux installation complete!${NC}"
 echo ""
 echo "Get started:"
-echo "  1. Create a project: agentmux init myproject"
-echo "  2. Start AgentMux: agentmux start"
+echo "  agentmux init myproject"
+echo "  agentmux start"
 echo ""
 echo "Documentation: https://github.com/dpbmaverick98/agentmux"
 echo ""

@@ -31,6 +31,7 @@ clap = { version = "4.4", features = ["derive"] }
 
 # Process management
 portable-pty = "0.8"
+which = "6.0"
 
 # HTTP client (for future API)
 reqwest = { version = "0.11", features = ["json"] }
