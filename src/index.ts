@@ -5,11 +5,14 @@ import { spawn } from 'child_process';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
+import crypto from 'crypto';
 
 const program = new Command();
-const AGENTMUX_DIR = path.join(os.homedir(), '.agentmux');
-const SKILLS_DIR = path.join(AGENTMUX_DIR, 'skills');
+
+// Get local .agentmux directory for current project
+function getAgentMuxDir(): string {
+  return path.join(process.cwd(), '.agentmux');
+}
 
 // Utility to execute shell commands
 function exec(cmd: string, options: any = {}) {
@@ -47,13 +50,19 @@ function getSessionName(): string {
   return process.env.AGENTMUX_SESSION || 'agentmux';
 }
 
-// Ensure tmux session exists
-function ensureSession() {
-  const session = getSessionName();
+// Get JJ state hash for change detection
+function getJJStateHash(agentMuxDir: string): string {
   try {
-    execSync(`tmux has-session -t ${session} 2>/dev/null`);
+    const jjDir = path.join(agentMuxDir, '.jj');
+    if (!fs.existsSync(jjDir)) return 'no-repo';
+
+    const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
+      cwd: process.cwd(),
+      encoding: 'utf-8'
+    });
+    return crypto.createHash('md5').update(log).digest('hex');
   } catch {
-    execSync(`tmux new-session -d -s ${session} -n status`);
+    return 'error';
   }
 }
 
@@ -72,11 +81,9 @@ program
     let installCmd = '';
 
     if (platform === 'darwin') {
-      // macOS
       console.log(chalk.gray('Detected macOS'));
       installCmd = 'brew install jj tmux';
     } else if (platform === 'linux') {
-      // Linux
       console.log(chalk.gray('Detected Linux'));
       installCmd = 'cargo install jj-cli && sudo apt-get install -y tmux';
     } else {
@@ -104,59 +111,100 @@ program
 
 program
   .command('init <name>')
-  .description('Initialize a new AgentMux project')
+  .description('Initialize a new AgentMux project in current directory')
   .action((name: string) => {
+    const agentMuxDir = getAgentMuxDir();
+    const currentDir = process.cwd();
+
     console.log(chalk.blue(`🌊 Initializing AgentMux project: ${name}`));
-    
-    const projectDir = path.join(AGENTMUX_DIR, 'projects', name);
-    fs.mkdirSync(projectDir, { recursive: true });
-    
-    // Check and suggest jj installation
-    const hasJJ = checkJJ();
-    if (!hasJJ) {
-      console.log(chalk.yellow('\n⚠️  IMPORTANT: JJ not found!'));
-      console.log(chalk.white('   JJ is required for version control. Install with:'));
-      console.log(chalk.cyan('   cargo install jj-cli'));
-      console.log(chalk.gray('   or'));
-      console.log(chalk.cyan('   brew install jj\n'));
+    console.log(chalk.gray(`   Location: ${currentDir}/.agentmux/\n`));
+
+    // Check if already initialized
+    if (fs.existsSync(agentMuxDir)) {
+      console.log(chalk.yellow('⚠️  .agentmux/ already exists in this directory'));
+      console.log(chalk.gray('   Use: rm -rf .agentmux && agentmux init <name> to reinitialize\n'));
+      return;
     }
-    
-    // Initialize JJ repo
-    if (hasJJ) {
+
+    // Create .agentmux directory structure
+    fs.mkdirSync(agentMuxDir, { recursive: true });
+    fs.mkdirSync(path.join(agentMuxDir, '.jj'), { recursive: true });
+    fs.mkdirSync(path.join(agentMuxDir, 'shared'), { recursive: true });
+    fs.mkdirSync(path.join(agentMuxDir, 'skills'), { recursive: true });
+
+    // Check if we're in a git repo
+    const isGitRepo = fs.existsSync(path.join(currentDir, '.git'));
+
+    // Initialize JJ
+    if (checkJJ()) {
       try {
-        execSync('jj init', { cwd: projectDir });
-        console.log(chalk.green('  ✓ JJ repository initialized'));
-      } catch {
+        if (isGitRepo) {
+          execSync('jj git init', { cwd: currentDir });
+          console.log(chalk.green('  ✓ JJ initialized (backed by existing git repo)'));
+        } else {
+          execSync('jj init', { cwd: currentDir });
+          console.log(chalk.green('  ✓ JJ initialized'));
+        }
+      } catch (e) {
         console.log(chalk.yellow('  ⚠️  Failed to initialize JJ'));
       }
+    } else {
+      console.log(chalk.yellow('\n⚠️  JJ not installed. Install with: cargo install jj-cli'));
     }
-    
+
+    // Create config.toml
+    const config = `# AgentMux Project Config
+[project]
+name = "${name}"
+created_at = "${new Date().toISOString()}"
+
+[agents]
+kimi = { enabled = true }
+minimax = { enabled = true }
+claude = { enabled = true }
+
+[settings]
+auto_refresh_interval = 3
+show_idle_indicator = true
+`;
+    fs.writeFileSync(path.join(agentMuxDir, 'config.toml'), config);
+
     // Create skill file
-    fs.mkdirSync(SKILLS_DIR, { recursive: true });
     const skillContent = generateSkill(name);
-    fs.writeFileSync(path.join(SKILLS_DIR, 'agentmux.md'), skillContent);
-    
-    // Create shared directory
-    const sharedDir = path.join(AGENTMUX_DIR, 'shared', name);
-    fs.mkdirSync(sharedDir, { recursive: true });
-    fs.writeFileSync(path.join(sharedDir, 'plan.md'), '# Plan\n\nAdd your multi-agent plan here.\n');
-    fs.writeFileSync(path.join(sharedDir, 'messages.txt'), '# Messages\n\n');
-    
-    console.log(chalk.green('✅ Project initialized!'));
-    
-    if (!hasJJ) {
-      console.log(chalk.yellow('\n⚠️  Install JJ before starting:'));
-      console.log(chalk.cyan('   cargo install jj-cli'));
-    }
-    
-    console.log(chalk.gray(`\nNext steps:`));
-    console.log(chalk.gray(`  1. cd ${projectDir}`));
-    console.log(chalk.white(`  2. agentmux start    ${chalk.gray('← One command to start everything')}`));
+    fs.writeFileSync(path.join(agentMuxDir, 'skills', 'agentmux.md'), skillContent);
+
+    // Create shared files
+    fs.writeFileSync(path.join(agentMuxDir, 'shared', 'plan.md'), `# Plan for ${name}
+
+Add your multi-agent plan here.
+Use @agent tags to assign tasks.
+
+## @kimi
+Design the architecture
+
+## @minimax
+Implement the code
+
+## @claude
+Review and test
+`);
+    fs.writeFileSync(path.join(agentMuxDir, 'shared', 'messages.txt'), `# Messages for ${name}
+
+`);
+
+    console.log(chalk.green('\n✅ Project initialized!'));
+    console.log(chalk.gray(`\nDirectory structure:`));
+    console.log(chalk.white('   .agentmux/'));
+    console.log(chalk.white('   ├── .jj/              # JJ version control'));
+    console.log(chalk.white('   ├── config.toml       # Project config'));
+    console.log(chalk.white('   ├── skills/           # Agent skills'));
+    console.log(chalk.white('   └── shared/           # Shared context'));
+    console.log(chalk.gray(`\nNext step: agentmux start`));
   });
 
 program
   .command('start')
-  .description('Start full AgentMux environment with 4 windows')
+  .description('Start full AgentMux environment with 4 panes')
   .option('--kimi', 'Enable kimi agent', true)
   .option('--minimax', 'Enable minimax agent', true)
   .option('--claude', 'Enable claude agent', true)
@@ -171,8 +219,16 @@ program
       return;
     }
 
+    // Check if initialized
+    const agentMuxDir = getAgentMuxDir();
+    if (!fs.existsSync(agentMuxDir)) {
+      console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
+      console.log(chalk.white('Run: agentmux init <project-name>\n'));
+      return;
+    }
+
     const session = getSessionName();
-    const projectName = path.basename(process.cwd());
+    const currentDir = process.cwd();
 
     console.log(chalk.blue('🌊 Starting AgentMux environment...\n'));
 
@@ -183,68 +239,65 @@ program
 
     // Create 4-pane split screen layout
     console.log(chalk.gray('Creating 4-pane split screen...'));
-    
+
     // Create session with first pane (status - top left) and enable mouse
     execSync(`tmux new-session -d -s ${session} -n agentmux`);
     execSync(`tmux set -t ${session} mouse on`);
-    
+
     // Split horizontally - creates right pane (kimi - top right)
     console.log(chalk.gray('Creating kimi pane...'));
     execSync(`tmux split-window -h -t ${session}`);
-    
+
     // Go back to left pane and split vertically - creates bottom left (minimax)
     console.log(chalk.gray('Creating minimax pane...'));
     execSync(`tmux select-pane -t ${session}:0.0`);
     execSync(`tmux split-window -v -t ${session}`);
-    
+
     // Go to right pane and split vertically - creates bottom right (claude)
     console.log(chalk.gray('Creating claude pane...'));
     execSync(`tmux select-pane -t ${session}:0.1`);
     execSync(`tmux split-window -v -t ${session}`);
-    
+
     // Layout:
     // Pane 0 (top-left): Status
     // Pane 1 (top-right): KIMI
     // Pane 2 (bottom-left): MINIMAX
     // Pane 3 (bottom-right): CLAUDE
-    
+
     // Start agents in their panes
-    
-    // Pane 0: Status monitor
+
+    // Pane 0: Status monitor (live updating)
     console.log(chalk.gray('Setting up status pane...'));
     execSync(`tmux select-pane -t ${session}:0.0`);
-    execSync(`tmux send-keys -t ${session}:0.0 "clear" C-m`);
-    setTimeout(() => {
-      execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
-    }, 500);
-    
+    execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
+
     // Pane 1: KIMI (top-right)
     if (options.kimi) {
       console.log(chalk.gray('Starting kimi...'));
       execSync(`tmux select-pane -t ${session}:0.1`);
       execSync(`tmux send-keys -t ${session}:0.1 "clear" C-m`);
-      const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${process.cwd()} opencode`;
+      const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${currentDir} opencode`;
       execSync(`tmux send-keys -t ${session}:0.1 "${kimiCmd}" C-m`);
     }
-    
+
     // Pane 2: MINIMAX (bottom-left)
     if (options.minimax) {
       console.log(chalk.gray('Starting minimax...'));
       execSync(`tmux select-pane -t ${session}:0.2`);
       execSync(`tmux send-keys -t ${session}:0.2 "clear" C-m`);
-      const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${process.cwd()} opencode`;
+      const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${currentDir} opencode`;
       execSync(`tmux send-keys -t ${session}:0.2 "${minimaxCmd}" C-m`);
     }
-    
+
     // Pane 3: CLAUDE (bottom-right)
     if (options.claude) {
       console.log(chalk.gray('Starting claude...'));
       execSync(`tmux select-pane -t ${session}:0.3`);
       execSync(`tmux send-keys -t ${session}:0.3 "clear" C-m`);
-      const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${process.cwd()} claude`;
+      const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${currentDir} claude`;
       execSync(`tmux send-keys -t ${session}:0.3 "${claudeCmd}" C-m`);
     }
-    
+
     // Equalize pane sizes
     execSync(`tmux select-layout -t ${session} tiled`);
 
@@ -269,112 +322,125 @@ program
   });
 
 program
-  .command('tmux-start')
-  .description('Start tmux session for AgentMux')
-  .option('-a, --attach', 'Auto-attach to tmux after starting')
-  .action((options: any) => {
-    if (!checkTmux()) return;
-
-    const session = getSessionName();
-    ensureSession();
-
-    console.log(chalk.green(`✅ tmux session '${session}' ready`));
-
-    if (options.attach) {
-      console.log(chalk.blue('\n🔗 Attaching to tmux...'));
-      console.log(chalk.gray('   Press Ctrl+B then c to create new window'));
-      console.log(chalk.gray('   Press Ctrl+B then n/p to switch windows'));
-      console.log(chalk.gray('   Press Ctrl+B then d to detach\n'));
-      spawn('tmux', ['attach', '-t', session], { stdio: 'inherit' });
-    } else {
-      console.log(chalk.yellow('\n👀 To see your agents, run:'));
-      console.log(chalk.white('   tmux attach -t ' + session));
-      console.log(chalk.gray('\nOr spawn an agent:'));
-      console.log(chalk.gray('   agentmux spawn kimi "Your task"'));
-    }
-  });
-
-program
-  .command('attach')
-  .description('Attach to the AgentMux tmux session')
+  .command('status')
+  .description('Show live status with auto-refresh (runs until Ctrl+C)')
   .action(() => {
-    if (!checkTmux()) return;
+    const agentMuxDir = getAgentMuxDir();
 
-    const session = getSessionName();
-    console.log(chalk.blue(`🔗 Attaching to tmux session: ${session}`));
-    console.log(chalk.gray('Press Ctrl+B then d to detach\n'));
-    spawn('tmux', ['attach', '-t', session], { stdio: 'inherit' });
-  });
-
-program
-  .command('windows')
-  .description('List all tmux windows')
-  .action(() => {
-    if (!checkTmux()) return;
-
-    const session = getSessionName();
-    try {
-      const output = exec(`tmux list-windows -t ${session} -F "#I: #W"`);
-      console.log(chalk.blue(`\n📋 Windows in ${session}:\n`));
-      console.log(output || chalk.gray('  No windows yet'));
-    } catch {
-      console.log(chalk.red(`❌ No tmux session. Run: agentmux tmux-start`));
+    if (!fs.existsSync(agentMuxDir)) {
+      console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
+      console.log(chalk.white('Run: agentmux init <project-name>\n'));
+      return;
     }
-  });
 
-program
-  .command('spawn <agent> [task...]')
-  .description('Spawn an AI agent in a new tmux window')
-  .option('-p, --provider <provider>', 'AI provider (kimi, minimax)', 'kimi')
-  .action((agent: string, task: string[], options: any) => {
-    if (!checkTmux()) return;
-    
-    ensureSession();
-    const session = getSessionName();
-    const taskStr = task.join(' ') || 'Start working';
-    
-    // Determine command based on agent type
-    let cmd: string;
-    if (agent === 'claude') {
-      cmd = 'claude --dangerously-skip-permissions -c';
-    } else {
-      // Just run opencode interactively - user will select provider in the UI
-      cmd = `opencode`;
+    let lastState = '';
+    let lastUpdateTime = Date.now();
+
+    function renderStatus() {
+      // Clear screen and move cursor to top
+      console.clear();
+
+      console.log(chalk.blue.bold('\n📊 AgentMux Status\n'));
+
+      // Calculate idle time
+      const secondsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
+      process.stdout.write(`${chalk.gray(`⏱️  Last update: ${secondsSinceUpdate}s ago`)}\n\n`);
+
+      // Show JJ changes
+      console.log(chalk.yellow('JJ Changes:'));
+      if (checkJJ()) {
+        try {
+          const jjDir = path.join(agentMuxDir, '.jj');
+          if (fs.existsSync(jjDir)) {
+            const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n" 2>/dev/null || echo "  No changes yet"');
+            if (log && log.trim()) {
+              console.log(log);
+            } else {
+              console.log(chalk.gray('  No changes yet'));
+            }
+          } else {
+            console.log(chalk.gray('  JJ repo initializing...'));
+          }
+        } catch (e) {
+          console.log(chalk.gray('  No changes yet'));
+        }
+      } else {
+        console.log(chalk.gray('  JJ not installed'));
+      }
+
+      // Show tmux session info
+      console.log(chalk.yellow('\nActive Agents:'));
+      try {
+        const session = getSessionName();
+        const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
+        if (output) {
+          const panes = ['Status', 'Kimi', 'Minimax', 'Claude'];
+          output.trim().split('\n').forEach((line, idx) => {
+            const paneName = panes[idx] || `Pane ${idx}`;
+            const cmd = line.split(':')[1]?.trim() || 'idle';
+            console.log(`  • ${paneName}: ${cmd}`);
+          });
+        } else {
+          console.log(chalk.gray('  No active session'));
+        }
+      } catch {
+        console.log(chalk.gray('  No active session'));
+      }
+
+      // Show recent messages
+      console.log(chalk.yellow('\nRecent Messages:'));
+      try {
+        const messagesPath = path.join(agentMuxDir, 'shared', 'messages.txt');
+        if (fs.existsSync(messagesPath)) {
+          const messages = fs.readFileSync(messagesPath, 'utf-8');
+          const lines = messages.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
+          if (lines.length > 0) {
+            lines.slice(-5).forEach((line: string) => {
+              console.log(`  ${line}`);
+            });
+          } else {
+            console.log(chalk.gray('  No messages yet'));
+          }
+        } else {
+          console.log(chalk.gray('  No messages'));
+        }
+      } catch {
+        console.log(chalk.gray('  No messages'));
+      }
+
+      console.log(chalk.gray('\n  [Auto-refreshes every 3s... Press Ctrl+C to exit]\n'));
     }
-    
-    // Create new tmux window
-    const windowName = agent.toLowerCase();
-    try {
-      execSync(`tmux new-window -t ${session} -n ${windowName}`);
-    } catch {
-      // Window might already exist
-    }
-    
-    // Set environment variables for skill injection
-    const envVars = [
-      `AGENTMUX_AGENT=${agent}`,
-      `AGENTMUX_PROJECT=${process.cwd()}`,
-      `AGENTMUX_SHARED=${path.join(AGENTMUX_DIR, 'shared', path.basename(process.cwd()))}`,
-    ];
-    
-    // Start the agent
-    const fullCmd = `${envVars.join(' ')} ${cmd}`;
-    execSync(`tmux send-keys -t ${session}:${windowName} "${fullCmd}" C-m`);
-    
-    // Send initial message about skill
-    setTimeout(() => {
-      const skillMsg = `echo "📚 AgentMux skill available! Run: am help"`;
-      execSync(`tmux send-keys -t ${session}:${windowName} "${skillMsg}" C-m`);
-      
-      // Send the task
-      const taskCmd = `echo "🎯 Task: ${taskStr}"`;
-      execSync(`tmux send-keys -t ${session}:${windowName} "${taskCmd}" C-m`);
+
+    // Initial render
+    renderStatus();
+
+    // Set up polling for JJ changes
+    const pollInterval = setInterval(() => {
+      const currentState = getJJStateHash(agentMuxDir);
+
+      if (currentState !== lastState) {
+        lastState = currentState;
+        lastUpdateTime = Date.now();
+        renderStatus();
+      }
+    }, 3000);
+
+    // Update idle indicator every second
+    const idleInterval = setInterval(() => {
+      // Only update the idle line to avoid full re-render flicker
+      process.stdout.write(`\x1b[2A\r${chalk.gray(`⏱️  Last update: ${Math.floor((Date.now() - lastUpdateTime) / 1000)}s ago`)}\x1b[2B`);
     }, 1000);
-    
-    console.log(chalk.green(`✅ Spawned ${agent} in tmux window`));
-    console.log(chalk.gray(`   Task: ${taskStr}`));
-    console.log(chalk.yellow(`\n👀 To see it, run: tmux attach -t ${session}`));
-    console.log(chalk.gray(`   Then press Ctrl+B, then ${windowName === 'kimi' ? '2' : windowName === 'minimax' ? '3' : windowName === 'claude' ? '4' : 'window number'} to switch to ${agent}`));
+
+    // Handle exit gracefully
+    process.on('SIGINT', () => {
+      clearInterval(pollInterval);
+      clearInterval(idleInterval);
+      console.log(chalk.gray('\n\n👋 Status monitor stopped\n'));
+      process.exit(0);
+    });
+
+    // Keep process alive
+    setInterval(() => {}, 1000);
   });
 
 program
@@ -382,170 +448,50 @@ program
   .description('Send a message to another agent (uses tmux send-keys)')
   .action((to: string, message: string[]) => {
     if (!checkTmux()) return;
-    
+
     const session = getSessionName();
     const msg = message.join(' ');
     const from = process.env.AGENTMUX_AGENT || 'user';
-    
+
     const fullMsg = `echo "📨 [@${from} → @${to}]: ${msg}"`;
-    
+
     try {
-      execSync(`tmux send-keys -t ${session}:${to.toLowerCase()} "${fullMsg}" C-m`);
-      console.log(chalk.green(`✅ Message sent to ${to}`));
-    } catch (e) {
-      console.log(chalk.red(`❌ Failed to send to ${to}. Is the window open?`));
-    }
-  });
+      // Map agent names to pane numbers
+      const paneMap: {[key: string]: number} = {
+        'status': 0,
+        'kimi': 1,
+        'minimax': 2,
+        'claude': 3
+      };
+      const paneNum = paneMap[to.toLowerCase()];
 
-program
-  .command('status')
-  .description('Show current status of all agents and JJ changes')
-  .action(() => {
-    console.log(chalk.blue.bold('\n📊 AgentMux Status\n'));
-
-    // Detect project directory - check if we're in a project or use env var
-    let projectDir = process.cwd();
-    const envProject = process.env.AGENTMUX_PROJECT;
-
-    // If AGENTMUX_PROJECT is set and exists, use it
-    if (envProject && fs.existsSync(envProject)) {
-      projectDir = envProject;
-    } else {
-      // Try to find project by looking for .jj directory in parent folders
-      let currentDir = process.cwd();
-      while (currentDir !== '/') {
-        if (fs.existsSync(path.join(currentDir, '.jj'))) {
-          projectDir = currentDir;
-          break;
-        }
-        const parentDir = path.dirname(currentDir);
-        if (parentDir === currentDir) break;
-        currentDir = parentDir;
-      }
-    }
-
-    // Show JJ changes
-    console.log(chalk.yellow('JJ Changes:'));
-    if (checkJJ()) {
-      try {
-        // Check if there's a jj repo in the project directory
-        if (fs.existsSync(path.join(projectDir, '.jj'))) {
-          const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n"', { cwd: projectDir });
-          if (log && log.trim()) {
-            console.log(log);
-          } else {
-            console.log(chalk.gray('  No changes yet'));
-          }
-        } else {
-          console.log(chalk.gray(`  No JJ repo found in ${projectDir}`));
-          console.log(chalk.gray('  Run: agentmux init <project>'));
-        }
-      } catch (e) {
-        console.log(chalk.gray('  No JJ repo found'));
-      }
-    } else {
-      console.log(chalk.gray('  JJ not installed'));
-    }
-    
-    // Show tmux windows
-    console.log(chalk.yellow('\nActive Agents:'));
-    try {
-      const windows = exec(`tmux list-windows -t ${getSessionName()} -F "#W"`);
-      if (windows) {
-        windows.trim().split('\n').forEach((win: string) => {
-          if (win !== 'status') {
-            console.log(`  • ${win}`);
-          }
-        });
-      }
-    } catch {
-      console.log(chalk.gray('  No tmux session. Run: agentmux tmux-start'));
-    }
-    
-    // Show recent messages
-    console.log(chalk.yellow('\nRecent Messages:'));
-    try {
-      const sharedDir = path.join(AGENTMUX_DIR, 'shared', path.basename(process.cwd()));
-      const messagesPath = path.join(sharedDir, 'messages.txt');
-      if (fs.existsSync(messagesPath)) {
-        const messages = fs.readFileSync(messagesPath, 'utf-8');
-        const lines = messages.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
-        lines.slice(-5).forEach((line: string) => {
-          console.log(`  ${line}`);
-        });
+      if (paneNum !== undefined) {
+        execSync(`tmux send-keys -t ${session}:0.${paneNum} "${fullMsg}" C-m`);
+        console.log(chalk.green(`✅ Message sent to ${to}`));
       } else {
-        console.log(chalk.gray('  No messages'));
+        console.log(chalk.red(`❌ Unknown agent: ${to}. Try: status, kimi, minimax, claude`));
       }
-    } catch {
-      console.log(chalk.gray('  No messages'));
+    } catch (e) {
+      console.log(chalk.red(`❌ Failed to send to ${to}. Is the session running?`));
     }
-    
-    console.log();
   });
 
 program
-  .command('run <plan>')
-  .description('Execute a plan from markdown file')
-  .action((planFile: string) => {
-    console.log(chalk.blue(`🚀 Executing plan: ${planFile}\n`));
-    
-    if (!fs.existsSync(planFile)) {
-      console.log(chalk.red(`❌ Plan file not found: ${planFile}`));
+  .command('config')
+  .description('Show current project configuration')
+  .action(() => {
+    const agentMuxDir = getAgentMuxDir();
+    const configPath = path.join(agentMuxDir, 'config.toml');
+
+    if (!fs.existsSync(configPath)) {
+      console.log(chalk.red('\n❌ No config found. Run: agentmux init <project>\n'));
       return;
     }
-    
-    const content = fs.readFileSync(planFile, 'utf-8');
-    const sections = parsePlan(content);
-    
-    sections.forEach((section, index) => {
-      console.log(chalk.gray(`[${index + 1}/${sections.length}] Spawning @${section.agent}: ${section.task.substring(0, 50)}...`));
-      
-      // Spawn with delay to avoid overwhelming tmux
-      setTimeout(() => {
-        const cmd = `agentmux spawn ${section.agent} "${section.task}"`;
-        execSync(cmd);
-      }, index * 2000);
-    });
-    
-    console.log(chalk.green(`\n✅ Spawned ${sections.length} agents`));
-  });
 
-// Helper function to parse markdown plan
-function parsePlan(content: string): Array<{agent: string, task: string}> {
-  const sections: Array<{agent: string, task: string}> = [];
-  const lines = content.split('\n');
-  
-  let currentAgent: string | null = null;
-  let currentTask: string[] = [];
-  
-  for (const line of lines) {
-    // Check for agent header: ## @agent or ## Agent Name
-    const match = line.match(/^##\s+@?(\w+).*$/i);
-    if (match) {
-      // Save previous section
-      if (currentAgent && currentTask.length > 0) {
-        sections.push({
-          agent: currentAgent,
-          task: currentTask.join(' ').trim()
-        });
-      }
-      currentAgent = match[1].toLowerCase();
-      currentTask = [];
-    } else if (currentAgent && line.trim() && !line.startsWith('#')) {
-      currentTask.push(line.trim());
-    }
-  }
-  
-  // Don't forget the last section
-  if (currentAgent && currentTask.length > 0) {
-    sections.push({
-      agent: currentAgent,
-      task: currentTask.join(' ').trim()
-    });
-  }
-  
-  return sections;
-}
+    console.log(chalk.blue('\n⚙️  AgentMux Configuration\n'));
+    const config = fs.readFileSync(configPath, 'utf-8');
+    console.log(config);
+  });
 
 // Helper to generate skill content
 function generateSkill(projectName: string): string {
@@ -556,6 +502,7 @@ You're working in an AgentMux multi-agent environment with JJ version control.
 ## Quick Commands
 
 ### Check Status
+Look at the top-left pane or run:
 \`\`\`bash
 agentmux status
 \`\`\`
@@ -571,40 +518,42 @@ agentmux send <agent-name> "Your message"
 Create a change for your work:
 \`\`\`bash
 jj new -m "@$AGENTMUX_AGENT what you're doing"
-\`\`\`
+\`\`
 
 See your changes:
 \`\`\`bash
 jj diff
 jj log
-\`\`\`
+\`\`
 
 Update your progress:
 \`\`\`bash
 jj describe -m "@$AGENTMUX_AGENT updated: what changed"
-\`\`\`
+\`\`
 
-## Auto-Commit
+## Multi-Agent Collaboration
 
-When you save files, consider running:
-\`\`\`bash
-jj describe -m "@$AGENTMUX_AGENT: brief description of changes"
-\`\`\`
+1. Work on your assigned task
+2. Commit with descriptive message using jj
+3. Message other agents when you need something:
+   \`agentmux send <agent> "Please review X"\`
+4. Check other agents' work via jj log
 
-## Communication
+## Project Structure
 
-To collaborate with other agents:
-1. Do your work
-2. Commit with descriptive message
-3. Message other agents: \`agentmux send <agent> "Check my changes"\`
-4. They can see your work via \`jj log\` and \`jj diff -r <your-change-id>\`
+- JJ Repo: .agentmux/.jj/
+- Shared Context: .agentmux/shared/
+- Config: .agentmux/config.toml
+- This Skill: .agentmux/skills/agentmux.md
 
-## Environment
+## Tips
 
-- Project: ${projectName}
-- Shared: ~/.agentmux/shared/${projectName}/
-- Messages: ~/.agentmux/shared/${projectName}/messages.txt
+- Use descriptive commit messages: "@kimi implemented auth API"
+- Check the status pane (top-left) for live updates
+- Click between panes with mouse or use Ctrl+B + arrow keys
 `;
 }
 
 program.parse();
+
+export {};
