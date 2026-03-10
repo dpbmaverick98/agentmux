@@ -1,5 +1,0 @@
-name = "shared-context-writer"
-version = "1.0.0"
-description = "Write updates to shared context for other agents to see"
-author = "AgentMux"
-tags = ["context", "sharing", "collaboration"]

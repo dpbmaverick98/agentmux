@@ -1,80 +1,152 @@
-# 🌊 AgentMux
+# AgentMux v3 - Ultra Lean
 
-Minimal terminal multiplexer for AI agent collaboration - built in Rust.
+Ultra-lean multi-agent terminal multiplexer using tmux and JJ.
 
-## Why AgentMux?
+## Philosophy
 
-You use multiple AI agents:
-- **Kimi for planning** → Writes to `plan.md`
-- **MiniMax for coding** → Reads `plan.md`, writes code
-- **Claude Opus for review** → Reads everything, suggests improvements
+- **tmux IS the infrastructure** - No custom TUI
+- **JJ for version control** - Agents commit naturally
+- **Visible communication** - tmux send-keys for cross-agent messaging
+- **Single install** - One binary, minimal dependencies
 
-**The problem:** Copy-pasting between terminal windows.
+## Install
 
-**The solution:** AgentMux - one window, multiple agents, shared context.
+```bash
+# Install dependencies first
+brew install tmux
+cargo install jj-cli
 
-## Features
+# Install agentmux
+bun install  # or npm install
+bun run build
 
-- 🖥️ **Vertical tabs** - See all agents at a glance
-- 📝 **Shared context** - Agents read/write to common files
-- 🔔 **Notifications** - Know when agents update shared files
-- ⌨️ **Keyboard shortcuts** - Fast switching between agents
-- ⚡ **Native performance** - Built in Rust, no Electron
+# Or use directly
+bun run ./src/index.ts
+```
 
 ## Quick Start
 
-### One-Line Install
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/install.sh | bash
-```
-
-### Create a Project
-
-```bash
+# 1. Initialize project
 agentmux init myproject
-cd myproject
+
+# 2. Start tmux session
+agentmux tmux-start
+
+# 3. Spawn your first agent
+agentmux spawn kimi "Design auth API"
+
+# 4. Spawn another agent
+agentmux spawn minimax "Implement auth based on @kimi's design"
+
+# 5. Check status
+agentmux status
 ```
 
-### Start AgentMux
+## Commands
 
+### `agentmux init <name>`
+Initialize a new AgentMux project with JJ repo and shared context.
+
+### `agentmux tmux-start`
+Start the tmux session. Attach with: `tmux attach -t agentmux`
+
+### `agentmux spawn <agent> [task...]`
+Spawn an AI agent in a new tmux window.
+- `agentmux spawn kimi "Implement auth"`
+- `agentmux spawn claude "Review the code"`
+- `agentmux spawn minimax "Fix bugs" --provider minimax`
+
+### `agentmux send <to> <message...>`
+Send a visible message to another agent's terminal.
 ```bash
-agentmux start
+agentmux send minimax "Check my auth.py changes"
+# minimax sees: "📨 [@kimi → @minimax]: Check my auth.py changes"
 ```
 
-## Keyboard Shortcuts
+### `agentmux status`
+Show JJ changes, active agents, and recent messages.
 
-| Key | Action |
-|-----|--------|
-| `n` | Next agent |
-| `p` | Previous agent |
-| `r` | Refresh shared context |
-| `q` | Quit |
+### `agentmux run <plan.md>`
+Execute a multi-agent plan from markdown.
+
+## Plan Format
+
+Create `plan.md`:
+```markdown
+# Auth Implementation
+
+## @kimi
+Design the auth API interface
+- Create auth.py with clear methods
+- Document expected inputs/outputs
+
+## @minimax
+Implement the auth logic
+- Use @kimi's design
+- Add password hashing with bcrypt
+
+## @claude
+Review for security
+- Check @minimax's implementation
+- Look for vulnerabilities
+```
+
+Run it:
+```bash
+agentmux run plan.md
+# Spawns all 3 agents with their tasks
+```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│           AgentMux (Rust)               │
-├──────────┬──────────────────┬───────────┤
-│  Sidebar │    Terminal      │  Shared   │
-│  (Tabs)  │    (PTY)         │  Context  │
-├──────────┼──────────────────┼───────────┤
-│ 🟢 Kimi  │ $ opencode       │ 📄 plan   │
-│ ⚪ Mini  │ > Working...     │ 📄 code   │
-│ ⚪ Opus  │                  │ 💬 chat   │
-└──────────┴──────────────────┴───────────┘
+Your Terminal
+└── tmux session "agentmux"
+    ├── window: opencode (kimi)
+    ├── window: opencode (minimax)
+    ├── window: claude (opus)
+    └── window: [you run commands here]
+        
+JJ Repo (agents commit naturally via skill)
+Shared Context (~/.agentmux/shared/)
 ```
 
-## Development
+## Communication
 
-```bash
-git clone https://github.com/dpbmaverick98/agentmux.git
-cd agentmux
-cargo build --release
-./target/release/agentmux init test
-./target/release/agentmux start
-```
+**Cross-agent messaging uses tmux send-keys:**
+- Visible in recipient's terminal
+- Literally types the message
+- No complex IPC needed
+
+**JJ for work tracking:**
+- Each agent creates changes
+- Descriptive commit messages
+- Natural code review workflow
+
+## Skill Auto-Injection
+
+When you spawn an agent, agentmux:
+1. Sets environment variables
+2. Provides skill via `~/.agentmux/skills/agentmux.md`
+3. Agent can run `am help` to see commands
+4. Skill teaches: JJ workflow, messaging, status checking
+
+## Why This Design?
+
+- **No custom TUI** - tmux handles everything visual
+- **No heavy coordinator** - tmux manages windows
+- **Familiar tools** - opencode, claude, jj, tmux
+- **Visible communication** - You see messages appear in real-time
+- **Flexible** - Agents use JJ however they want
+- **Simple** - ~300 lines of TypeScript
+
+## Requirements
+
+- tmux
+- jj (optional but recommended)
+- opencode or claude (for AI agents)
+- Bun or Node.js
 
 ## License
 
