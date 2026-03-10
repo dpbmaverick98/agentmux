@@ -142,15 +142,19 @@ async fn init_project(name: String) -> Result<()> {
     std::fs::create_dir_all(&skills_dir)?;
     std::fs::create_dir_all(&project_dir)?;
     
-    // Initialize JJ repo
+    // Initialize JJ repo (optional - only if jj is installed)
     let repo_dir = project_dir.join("repo");
     std::fs::create_dir_all(&repo_dir)?;
     
-    // Run jj init
-    std::process::Command::new("jj")
+    // Try to run jj init, but don't fail if jj is not installed
+    match std::process::Command::new("jj")
         .args(&["init", "--git-repo", "."])
         .current_dir(&repo_dir)
-        .output()?;
+        .output()
+    {
+        Ok(_) => println!("  ✓ JJ repository initialized"),
+        Err(_) => println!("  ⚠️  JJ not found. Install with: cargo install jj-cli"),
+    }
     
     // Create default config
     let config = format!(r#"version = "0.2.0"
