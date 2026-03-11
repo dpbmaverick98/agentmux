@@ -2495,19 +2495,6 @@ auto_refresh_interval = 3
 show_idle_indicator = true
 `;
   fs.writeFileSync(path.join(agentMuxDir, "config.toml"), config);
-  const agentmuxInstallDir = path.dirname(process.argv[1]);
-  const skillsSourceDir = path.join(agentmuxInstallDir, "..", "skills");
-  const skillsTargetDir = path.join(agentMuxDir, "skills");
-  try {
-    if (fs.existsSync(skillsSourceDir)) {
-      fs.cpSync(skillsSourceDir, skillsTargetDir, { recursive: true });
-    } else {
-      fs.mkdirSync(path.join(skillsTargetDir, "agentmux"), { recursive: true });
-      fs.mkdirSync(path.join(skillsTargetDir, "jj-workflow"), { recursive: true });
-    }
-  } catch (e) {
-    console.log(source_default.yellow("  \u26A0\uFE0F  Could not copy skills, directories created for manual install"));
-  }
   fs.writeFileSync(path.join(agentMuxDir, "shared", "plan.md"), `# Plan for ${name}
 
 Add your multi-agent plan here.
@@ -2532,10 +2519,10 @@ Directory structure:`));
   console.log(source_default.white("   .agentmux/"));
   console.log(source_default.white("   \u251C\u2500\u2500 .jj/              # JJ version control"));
   console.log(source_default.white("   \u251C\u2500\u2500 config.toml       # Project config"));
-  console.log(source_default.white("   \u251C\u2500\u2500 skills/           # Agent skills"));
   console.log(source_default.white("   \u2514\u2500\u2500 shared/           # Shared context"));
   console.log(source_default.gray(`
-Next step: agentmux start`));
+Skills are installed globally in ~/.claude/skills/`));
+  console.log(source_default.gray(`Next step: agentmux start`));
 });
 program2.command("start").description("Start full AgentMux environment with 4 panes").option("--nui", "Enable nui agent", true).option("--sam", "Enable sam agent", true).option("--wit", "Enable wit agent", true).action((options) => {
   const hasTmux = checkTmux();

@@ -152,31 +152,30 @@ project/
 ├── .agentmux/
 │   ├── .jj/                        # JJ version control
 │   ├── config.toml                 # Project config
-│   ├── skills/
-│   │   ├── agentmux/
-│   │   │   └── SKILL.md            # AgentMux commands skill
-│   │   └── jj-workflow/
-│   │       └── SKILL.md            # JJ workflow skill
-│   └── shared/
+│   └── shared/                     # Shared context
 │       ├── plan.md                 # Project plan
 │       └── messages.txt            # Message log
 └── [your project files]
 ```
 
-## Agent Skills
+## Agent Skills (Global)
 
-Each agent automatically receives two Claude-formatted skills in `.agentmux/skills/`:
+Skills are installed globally in `~/.claude/skills/` and accessible to all agents:
 
-### `agentmux/SKILL.md`
-AgentMux-specific commands and workflows:
+### `/agentmux:` - AgentMux Commands
+Access via: `/agentmux: <command>`
+
+Provides:
 - Available commands (`agentmux list`, `agentmux send`, `agentmux spawn`, etc.)
 - How to message other agents
 - Spawning and killing agents
 - Environment variables
 - Keyboard shortcuts
 
-### `jj-workflow/SKILL.md`
-Complete JJ version control guide:
+### `/jj-workflow:` - JJ Version Control
+Access via: `/jj-workflow: <command>`
+
+Provides:
 - Creating and updating changes
 - Viewing commit history
 - Agent tagging conventions

@@ -163,6 +163,25 @@ if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
 fi
 
 echo ""
+echo "📚 Installing AgentMux skills to ~/.claude/skills/..."
+echo ""
+
+# Install skills globally for Claude
+mkdir -p "$HOME/.claude/skills/agentmux"
+mkdir -p "$HOME/.claude/skills/jj-workflow"
+
+# Download skill files from GitHub
+echo "  → Downloading agentmux skill..."
+curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/agentmux/SKILL.md" \
+  > "$HOME/.claude/skills/agentmux/SKILL.md"
+echo "  ✓ agentmux skill installed"
+
+echo "  → Downloading jj-workflow skill..."
+curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/jj-workflow/SKILL.md" \
+  > "$HOME/.claude/skills/jj-workflow/SKILL.md"
+echo "  ✓ jj-workflow skill installed"
+
+echo ""
 echo "✅ AgentMux installed successfully!"
 echo ""
 

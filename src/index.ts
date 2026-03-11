@@ -163,23 +163,6 @@ show_idle_indicator = true
 `;
     fs.writeFileSync(path.join(agentMuxDir, 'config.toml'), config);
 
-    // Copy skills from agentmux installation
-    const agentmuxInstallDir = path.dirname(process.argv[1]);
-    const skillsSourceDir = path.join(agentmuxInstallDir, '..', 'skills');
-    const skillsTargetDir = path.join(agentMuxDir, 'skills');
-    
-    try {
-      if (fs.existsSync(skillsSourceDir)) {
-        fs.cpSync(skillsSourceDir, skillsTargetDir, { recursive: true });
-      } else {
-        // Fallback: create directories for manual skill installation
-        fs.mkdirSync(path.join(skillsTargetDir, 'agentmux'), { recursive: true });
-        fs.mkdirSync(path.join(skillsTargetDir, 'jj-workflow'), { recursive: true });
-      }
-    } catch (e) {
-      console.log(chalk.yellow('  ⚠️  Could not copy skills, directories created for manual install'));
-    }
-
     // Create shared files
     fs.writeFileSync(path.join(agentMuxDir, 'shared', 'plan.md'), `# Plan for ${name}
 
@@ -204,9 +187,9 @@ Review and test
     console.log(chalk.white('   .agentmux/'));
     console.log(chalk.white('   ├── .jj/              # JJ version control'));
     console.log(chalk.white('   ├── config.toml       # Project config'));
-    console.log(chalk.white('   ├── skills/           # Agent skills'));
     console.log(chalk.white('   └── shared/           # Shared context'));
-    console.log(chalk.gray(`\nNext step: agentmux start`));
+    console.log(chalk.gray(`\nSkills are installed globally in ~/.claude/skills/`));
+    console.log(chalk.gray(`Next step: agentmux start`));
   });
 
 program
