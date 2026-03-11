@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code, OpenCode, etc.) when working with code in this repository.
 
 ## Build & Run
 
@@ -53,3 +53,30 @@ Core: `init`, `start`, `stop`, `status`, `list`, `config`
 Messaging: `send <agent> "message"`
 Agent management: `spawn <harness> <name>`, `kill <agent-name>` (max 11 agents)
 Setup: `install`, `install-deps`
+
+## Session Start
+
+Run `am memory prime` at the beginning of each session to load accumulated expertise context:
+
+```bash
+# Load all memory domains
+am memory prime
+
+# Or load with full metadata
+am memory prime --full
+
+# Or load specific domain
+am memory prime decisions
+```
+
+This outputs formatted context from the memory system:
+- Conventions (project standards)
+- Known Failures (problems encountered and solutions)
+- Decisions (architectural choices and rationale)
+
+Record new learnings before finishing tasks:
+```bash
+am memory record project --type convention "Always use X for Y"
+am memory record tasks --type failure --description "Problem" --resolution "Solution"
+am memory record decisions --type decision --title "Choice" --rationale "Reason"
+```
