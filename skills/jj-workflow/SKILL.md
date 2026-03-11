@@ -81,6 +81,49 @@ gh pr create --title "..." --body "..."
 
 The status pane shows JJ working copy changes (refreshes every 3 seconds). If you use git directly, other agents won't see your work in progress.
 
+## Creating Pull Requests
+
+JJ and git maintain separate commit histories. To avoid "no common history" errors when creating PRs, always create a git branch first:
+
+### The Complete Workflow
+
+```bash
+# 1. Create git branch first (ensures proper ancestry with main)
+git checkout -b feature-name
+
+# 2. Make your changes...
+
+# 3. Create JJ change
+jj new -m "@$AGENTMUX_AGENT: description"
+
+# 4. Create JJ bookmark
+jj bookmark create feature-name
+
+# 5. Push to remote
+jj git push
+
+# 6. Create PR
+gh pr create --title "..." --body "..."
+```
+
+### Why This Works
+
+Creating the git branch first ensures:
+- Branch shares ancestry with `main`
+- GitHub recognizes common history
+- No "entirely different commit history" errors
+- Clean PR creation with `gh pr create`
+
+### What NOT To Do
+
+❌ DON'T: Create JJ bookmark without git branch first
+```bash
+jj new -m "@nui: feature"
+jj bookmark create feature  # History diverges from main!
+jj git push                 # Pushes with no common ancestor
+gh pr create                # Fails: no common history
+```
+
 ## Tips
 
 - Create JJ changes often with descriptive messages
