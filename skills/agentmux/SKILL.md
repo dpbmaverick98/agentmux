@@ -89,3 +89,44 @@ agentmux status
 3. `agentmux send <agent> "message"` - Communicate
 4. `jj log` - Check what others committed
 5. `agentmux spawn opencode helper` - Add helpers if needed
+
+## Memory System
+
+AgentMux has a built-in memory system for structured expertise management.
+
+### Session Start
+
+At the beginning of each session, run:
+```bash
+am memory prime
+```
+This loads accumulated expertise (conventions, failures, decisions).
+
+### Recording Learnings
+
+Before finishing tasks, record insights:
+```bash
+# Convention
+am memory record project --type convention "Use Bun runtime for TypeScript"
+
+# Failure
+am memory record tasks --type failure --description "JJ divergence" --resolution "Run jj log first"
+
+# Decision
+am memory record decisions --type decision --title "JSONL storage" --rationale "Git-friendly"
+```
+
+### Other Commands
+
+```bash
+am memory init           # Initialize (one-time)
+am memory add <domain>  # Add domain
+am memory query --all   # Query all records
+am memory status        # Show counts
+```
+
+### Domains
+
+- **project** - Conventions and standards
+- **tasks** - Known failures and resolutions
+- **decisions** - Architectural decisions
