@@ -54,37 +54,52 @@ jj abandon <rev>      # Delete change
 - **Auto snapshots** - Work is saved as you edit
 - **Better conflicts** - Multiple heads allowed
 
-## Critical: Use JJ, Not Git
+## Creating Pull Requests
 
-**⚠️ ALWAYS use JJ commands. Never use `git commit` directly.**
+JJ and git maintain separate commit histories. To avoid "no common history" errors when creating PRs, always create a git branch first:
 
-JJ is colocated with git. Using `git commit` creates git commits that JJ doesn't track, causing your changes to disappear from the status pane where other agents can see them.
-
-### The AgentMux Workflow
+### The Complete Workflow
 
 ```bash
-# 1. Make changes - edit files normally
-# 2. Create JJ change (this is your "commit")
-jj new -m "@$AGENTMUX_AGENT: what you did"
+# 1. Create git branch first (ensures proper ancestry with main)
+git checkout -b feature-name
 
-# 3. Push to GitHub (creates branch automatically)
+# 2. Make your changes...
+
+# 3. Create JJ change
+jj new -m "@$AGENTMUX_AGENT: description"
+
+# 4. Create JJ bookmark
+jj bookmark create feature-name
+
+# 5. Push to remote
 jj git push
 
-# 4. Create PR
+# 6. Create PR
 gh pr create --title "..." --body "..."
 ```
 
-### Common Mistake to Avoid
+### Why This Works
 
-❌ **DON'T:** `git add . && git commit -m "message"`
-✅ **DO:** `jj new -m "@nui: message"`
+Creating the git branch first ensures:
+- Branch shares ancestry with `main`
+- GitHub recognizes common history
+- No "entirely different commit history" errors
+- Clean PR creation with `gh pr create`
 
-The status pane shows JJ working copy changes (refreshes every 3 seconds). If you use git directly, other agents won't see your work in progress.
+### What NOT To Do
+
+❌ DON'T: Create JJ bookmark without git branch first
+```bash
+jj new -m "@nui: feature"
+jj bookmark create feature  # History diverges from main!
+jj git push                 # Pushes with no common ancestor
+gh pr create                # Fails: no common history
+```
 
 ## Tips
 
-- Create JJ changes often with descriptive messages
+- Commit often with descriptive messages
 - Use @agent tags for accountability
 - Check `jj log` to see team progress
 - Status pane refreshes every 3 seconds
-- If you accidentally use git, run `jj new` to capture the state in JJ
