@@ -170,6 +170,20 @@ program
       try {
         execSync('jj git init', { cwd: agentMuxDir });
         console.log(chalk.green('  ✓ JJ initialized in .agentmux/.jj/'));
+
+        // Create symlink in project root for easier JJ access
+        try {
+          const projectRoot = path.dirname(agentMuxDir);
+          const jjSymlinkPath = path.join(projectRoot, '.jj');
+          try {
+            fs.accessSync(jjSymlinkPath);
+          } catch {
+            fs.symlinkSync('.agentmux/.jj', jjSymlinkPath);
+            console.log(chalk.green('  ✓ Created .jj symlink for easier access'));
+          }
+        } catch (e) {
+          // Non-fatal - JJ still works from .agentmux/
+        }
       } catch (e) {
         console.log(chalk.yellow('  ⚠️  Failed to initialize JJ'));
       }
@@ -232,8 +246,20 @@ program
       return;
     }
 
-    const session = getSessionName();
+    // Ensure symlink exists (in case user deleted it)
     const currentDir = process.cwd();
+    try {
+      const jjSymlinkPath = path.join(currentDir, '.jj');
+      fs.accessSync(jjSymlinkPath);
+    } catch {
+      try {
+        fs.symlinkSync('.agentmux/.jj', path.join(currentDir, '.jj'));
+      } catch {
+        // Ignore errors, not critical
+      }
+    }
+
+    const session = getSessionName();
 
     console.log(chalk.blue('🌊 Starting AgentMux environment...\n'));
 
