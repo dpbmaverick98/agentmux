@@ -491,6 +491,20 @@ program
   });
 
 program
+  .command('whoami')
+  .description('Show current agent identity')
+  .action(() => {
+    const agent = process.env.AGENTMUX_AGENT || 'unknown';
+    const project = process.env.AGENTMUX_PROJECT || 'unknown';
+    
+    // Look up harness from AGENTS config
+    const agentConfig = AGENTS.find(a => a.name === agent);
+    const harness = agentConfig?.harness || 'unknown';
+    
+    console.log(`${agent} (${harness}) @ ${project}`);
+  });
+
+program
   .command('install-deps')
   .description('Install all required dependencies (claude, opencode, jj, tmux, bun)')
   .action(() => {

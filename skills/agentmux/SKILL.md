@@ -9,7 +9,17 @@ Multi-agent terminal multiplexer using tmux with 3 core agents (nui, sam, wit).
 
 ## Your Identity
 
-You are: **$AGENTMUX_AGENT** running on **${process.env.AGENTMUX_AGENT === 'wit' ? 'claude' : 'opencode'}**
+Check your identity at any time:
+```bash
+agentmux whoami
+# Output: nui (opencode) @ /path/to/project
+```
+
+Or check environment variable:
+```bash
+echo $AGENTMUX_AGENT
+# Output: nui, sam, wit, or status
+```
 
 ## The Team
 
