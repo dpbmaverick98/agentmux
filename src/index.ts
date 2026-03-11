@@ -1,13 +1,41 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
 const program = new Command();
+
+// Configuration constants
+const MAX_AGENTS = 11;
+const STATUS_REFRESH_INTERVAL_MS = 3000;
+const STATUS_REFRESH_INTERVAL_S = 3;
+
+// Agent configuration
+interface AgentConfig {
+  name: string;
+  pane: number;
+  harness: string;
+  cmd: string;
+  enabled: boolean;
+}
+
+const AGENTS: AgentConfig[] = [
+  { name: 'status', pane: 0, harness: 'monitor', cmd: '', enabled: true },
+  { name: 'nui', pane: 1, harness: 'opencode', cmd: 'opencode', enabled: true },
+  { name: 'sam', pane: 2, harness: 'opencode', cmd: 'opencode', enabled: true },
+  { name: 'wit', pane: 3, harness: 'claude', cmd: 'claude', enabled: true }
+];
+
+const AGENT_PANE_MAP: { [key: string]: number } = {
+  'status': 0,
+  'nui': 1,
+  'sam': 2,
+  'wit': 3
+};
 
 // Get local .agentmux directory for current project
 function getAgentMuxDir(): string {
@@ -54,7 +82,7 @@ function getSessionName(): string {
 function getJJStateHash(agentMuxDir: string): string {
   try {
     const jjDir = path.join(agentMuxDir, '.jj');
-    if (!fs.existsSync(jjDir)) return 'no-repo';
+    fs.accessSync(jjDir, fs.constants.F_OK);
 
     // Run jj from the project root (parent of .agentmux/)
     const projectRoot = path.dirname(agentMuxDir);
@@ -64,7 +92,7 @@ function getJJStateHash(agentMuxDir: string): string {
     });
     return crypto.createHash('md5').update(log).digest('hex');
   } catch {
-    return 'error';
+    return 'no-repo';
   }
 }
 
@@ -123,10 +151,13 @@ program
     console.log(chalk.gray(`   Location: ${currentDir}/.agentmux/\n`));
 
     // Check if already initialized
-    if (fs.existsSync(agentMuxDir)) {
+    try {
+      fs.accessSync(agentMuxDir, fs.constants.F_OK);
       console.log(chalk.yellow('⚠️  .agentmux/ already exists in this directory'));
       console.log(chalk.gray('   Use: rm -rf .agentmux && agentmux init to reinitialize\n'));
       return;
+    } catch {
+      // Directory doesn't exist, continue with initialization
     }
 
     // Create .agentmux directory structure
@@ -146,37 +177,20 @@ program
       console.log(chalk.yellow('\n⚠️  JJ not installed. Install with: brew install jj'));
     }
 
-    // Create config.toml
-    const config = `# AgentMux Project Config
-[project]
-name = "${name}"
-created_at = "${new Date().toISOString()}"
-
-[agents]
-kimi = { enabled = true }
-minimax = { enabled = true }
-claude = { enabled = true }
-
-[settings]
-auto_refresh_interval = 3
-show_idle_indicator = true
-`;
-    fs.writeFileSync(path.join(agentMuxDir, 'config.toml'), config);
-
     // Create shared files
     fs.writeFileSync(path.join(agentMuxDir, 'shared', 'plan.md'), `# Plan for ${name}
 
 Add your multi-agent plan here.
 Use @agent tags to assign tasks.
 
-## @kimi
-Design the architecture
+## @nui
+Design the architecture and plan implementation
 
-## @minimax
-Implement the code
+## @sam
+Implement the core functionality
 
-## @claude
-Review and test
+## @wit
+Review and test the implementation
 `);
     fs.writeFileSync(path.join(agentMuxDir, 'shared', 'messages.txt'), `# Messages for ${name}
 
@@ -186,7 +200,6 @@ Review and test
     console.log(chalk.gray(`\nDirectory structure:`));
     console.log(chalk.white('   .agentmux/'));
     console.log(chalk.white('   ├── .jj/              # JJ version control'));
-    console.log(chalk.white('   ├── config.toml       # Project config'));
     console.log(chalk.white('   └── shared/           # Shared context'));
     console.log(chalk.gray(`\nSkills are installed globally in ~/.claude/skills/`));
     console.log(chalk.gray(`Next step: agentmux start`));
@@ -211,7 +224,9 @@ program
 
     // Check if initialized
     const agentMuxDir = getAgentMuxDir();
-    if (!fs.existsSync(agentMuxDir)) {
+    try {
+      fs.accessSync(agentMuxDir, fs.constants.F_OK);
+    } catch {
       console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
       console.log(chalk.white('Run: agentmux init\n'));
       return;
@@ -262,35 +277,18 @@ program
     execSync(`tmux select-pane -t ${session}:0.0 -T "status"`);
     execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
 
-    // Pane 1: NUI (top-right)
-    if (options.nui) {
-      console.log(chalk.gray('Starting nui...'));
-      execSync(`tmux select-pane -t ${session}:0.1`);
-      execSync(`tmux select-pane -t ${session}:0.1 -T "nui (opencode)"`);
-      execSync(`tmux send-keys -t ${session}:0.1 "clear" C-m`);
-      const nuiCmd = `AGENTMUX_AGENT=nui AGENTMUX_PROJECT=${currentDir} opencode`;
-      execSync(`tmux send-keys -t ${session}:0.1 "${nuiCmd}" C-m`);
-    }
-
-    // Pane 2: SAM (bottom-left)
-    if (options.sam) {
-      console.log(chalk.gray('Starting sam...'));
-      execSync(`tmux select-pane -t ${session}:0.2`);
-      execSync(`tmux select-pane -t ${session}:0.2 -T "sam (opencode)"`);
-      execSync(`tmux send-keys -t ${session}:0.2 "clear" C-m`);
-      const samCmd = `AGENTMUX_AGENT=sam AGENTMUX_PROJECT=${currentDir} opencode`;
-      execSync(`tmux send-keys -t ${session}:0.2 "${samCmd}" C-m`);
-    }
-
-    // Pane 3: WIT (bottom-right)
-    if (options.wit) {
-      console.log(chalk.gray('Starting wit...'));
-      execSync(`tmux select-pane -t ${session}:0.3`);
-      execSync(`tmux select-pane -t ${session}:0.3 -T "wit (claude)"`);
-      execSync(`tmux send-keys -t ${session}:0.3 "clear" C-m`);
-      const witCmd = `AGENTMUX_AGENT=wit AGENTMUX_PROJECT=${currentDir} claude`;
-      execSync(`tmux send-keys -t ${session}:0.3 "${witCmd}" C-m`);
-    }
+    // Start agents in their panes using configuration
+    AGENTS.filter(a => a.name !== 'status').forEach(agent => {
+      const optionKey = agent.name as keyof typeof options;
+      if (options[optionKey]) {
+        console.log(chalk.gray(`Starting ${agent.name}...`));
+        execSync(`tmux select-pane -t ${session}:0.${agent.pane}`);
+        execSync(`tmux select-pane -t ${session}:0.${agent.pane} -T "${agent.name} (${agent.harness})"`);
+        execSync(`tmux send-keys -t ${session}:0.${agent.pane} "clear" C-m`);
+        const agentCmd = `AGENTMUX_AGENT=${agent.name} AGENTMUX_PROJECT=${currentDir} ${agent.cmd}`;
+        execSync(`tmux send-keys -t ${session}:0.${agent.pane} "${agentCmd}" C-m`);
+      }
+    });
 
     // Equalize pane sizes
     execSync(`tmux select-layout -t ${session} tiled`);
@@ -321,12 +319,15 @@ program
   .action(() => {
     const agentMuxDir = getAgentMuxDir();
 
-    if (!fs.existsSync(agentMuxDir)) {
+    try {
+      fs.accessSync(agentMuxDir, fs.constants.F_OK);
+    } catch {
       console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
       console.log(chalk.white('Run: agentmux init\n'));
       return;
     }
 
+    const hasJJ = checkJJ();
     let lastState = '';
     let lastUpdateTime = Date.now();
 
@@ -340,12 +341,13 @@ program
       const secondsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
       process.stdout.write(`${chalk.gray(`⏱️  Last update: ${secondsSinceUpdate}s ago`)}\n\n`);
 
-    // Show JJ changes
+      // Show JJ changes
       console.log(chalk.yellow('JJ Changes:'));
-      if (checkJJ()) {
+      if (hasJJ) {
         try {
           const jjDir = path.join(agentMuxDir, '.jj');
-          if (fs.existsSync(jjDir)) {
+          try {
+            fs.accessSync(jjDir, fs.constants.F_OK);
             // Run jj from the project root (parent of .agentmux/)
             const projectRoot = path.dirname(agentMuxDir);
             const log = exec('jj log --no-graph --template "change_id.short() ++ \" \" ++ description\\n" 2>/dev/null || echo "  No changes yet"', {
@@ -356,7 +358,7 @@ program
             } else {
               console.log(chalk.gray('  No changes yet'));
             }
-          } else {
+          } catch {
             console.log(chalk.gray('  JJ repo initializing...'));
           }
         } catch (e) {
@@ -372,9 +374,10 @@ program
         const session = getSessionName();
         const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
         if (output) {
-          const panes = ['Status', 'nui (opencode)', 'sam (opencode)', 'wit (claude)'];
-          output.trim().split('\n').forEach((line, idx) => {
-            const paneName = panes[idx] || `Pane ${idx}`;
+          const lines = output.trim().split('\n');
+          lines.forEach((line, idx) => {
+            const agent = AGENTS[idx];
+            const paneName = agent ? `${agent.name} (${agent.harness})` : `Pane ${idx}`;
             const cmd = line.split(':')[1]?.trim() || 'idle';
             console.log(`  • ${paneName}: ${cmd}`);
           });
@@ -389,36 +392,42 @@ program
       console.log(chalk.yellow('\nRecent Messages:'));
       try {
         const messagesPath = path.join(agentMuxDir, 'shared', 'messages.txt');
-        if (fs.existsSync(messagesPath)) {
-          const messages = fs.readFileSync(messagesPath, 'utf-8');
-          const lines = messages.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
-          if (lines.length > 0) {
-            lines.slice(-5).forEach((line: string) => {
-              // Parse timestamp from format: [2026-03-11T10:30:00.000Z] message
-              const match = line.match(/^\[(.*?)\] (.*)$/);
-              if (match) {
-                const timestamp = new Date(match[1]);
-                const msg = match[2];
-                const ago = Math.floor((Date.now() - timestamp.getTime()) / 1000);
-                const timeStr = ago < 60 ? `${ago}s ago` : 
-                               ago < 3600 ? `${Math.floor(ago/60)}m ago` : 
-                               `${Math.floor(ago/3600)}h ago`;
-                console.log(`  ${chalk.gray(`[${timeStr}]`)} ${msg}`);
-              } else {
-                console.log(`  ${line}`);
-              }
-            });
+        try {
+          fs.accessSync(messagesPath, fs.constants.F_OK);
+          // Use exec to tail the last 5 lines instead of reading entire file
+          const tailOutput = exec(`tail -n 5 "${messagesPath}" 2>/dev/null`);
+          if (tailOutput) {
+            const lines = tailOutput.trim().split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
+            if (lines.length > 0) {
+              lines.forEach((line: string) => {
+                // Parse timestamp from format: [2026-03-11T10:30:00.000Z] message
+                const match = line.match(/^\[(.*?)\] (.*)$/);
+                if (match) {
+                  const timestamp = new Date(match[1]);
+                  const msg = match[2];
+                  const ago = Math.floor((Date.now() - timestamp.getTime()) / 1000);
+                  const timeStr = ago < 60 ? `${ago}s ago` : 
+                                 ago < 3600 ? `${Math.floor(ago/60)}m ago` : 
+                                 `${Math.floor(ago/3600)}h ago`;
+                  console.log(`  ${chalk.gray(`[${timeStr}]`)} ${msg}`);
+                } else {
+                  console.log(`  ${line}`);
+                }
+              });
+            } else {
+              console.log(chalk.gray('  No messages yet'));
+            }
           } else {
-            console.log(chalk.gray('  No messages yet'));
+            console.log(chalk.gray('  No messages'));
           }
-        } else {
+        } catch {
           console.log(chalk.gray('  No messages'));
         }
       } catch {
         console.log(chalk.gray('  No messages'));
       }
 
-      console.log(chalk.gray('\n  [Auto-refreshes every 3s... Press Ctrl+C to exit]\n'));
+      console.log(chalk.gray(`\n  [Auto-refreshes every ${STATUS_REFRESH_INTERVAL_S}s... Press Ctrl+C to exit]\n`));
     }
 
     // Initial render
@@ -434,7 +443,7 @@ program
       }
       // Always re-render to update the idle counter
       renderStatus();
-    }, 3000);
+    }, STATUS_REFRESH_INTERVAL_MS);
 
     // Handle exit gracefully
     process.on('SIGINT', () => {
@@ -442,9 +451,6 @@ program
       console.log(chalk.gray('\n\n👋 Status monitor stopped\n'));
       process.exit(0);
     });
-
-    // Keep process alive
-    setInterval(() => {}, 1000);
   });
 
 program
@@ -463,20 +469,13 @@ program
     const timestamp = new Date().toISOString();
 
     try {
-      // Map agent names to pane numbers
-      const paneMap: {[key: string]: number} = {
-        'status': 0,
-        'nui': 1,
-        'sam': 2,
-        'wit': 3
-      };
-      const paneNum = paneMap[to.toLowerCase()];
+      const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
 
       if (paneNum !== undefined) {
         // Send message as literal text into the agent's chat input
-        const escaped = displayMsg.replace(/'/g, "'\\''");
-        execSync(`tmux send-keys -t ${session}:0.${paneNum} -l '${escaped}'`);
-        execSync(`tmux send-keys -t ${session}:0.${paneNum} Enter`);
+        // Use execFileSync with array args to prevent shell injection and ensure ordering
+        execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, '-l', displayMsg]);
+        execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, 'Enter']);
         console.log(chalk.green(`✅ Message sent to ${to}`));
         
         // Log message to messages.txt with timestamp
@@ -489,23 +488,6 @@ program
     } catch (e) {
       console.log(chalk.red(`❌ Failed to send to ${to}. Is the session running?`));
     }
-  });
-
-program
-  .command('config')
-  .description('Show current project configuration')
-  .action(() => {
-    const agentMuxDir = getAgentMuxDir();
-    const configPath = path.join(agentMuxDir, 'config.toml');
-
-    if (!fs.existsSync(configPath)) {
-      console.log(chalk.red('\n❌ No config found. Run: agentmux init <project>\n'));
-      return;
-    }
-
-    console.log(chalk.blue('\n⚙️  AgentMux Configuration\n'));
-    const config = fs.readFileSync(configPath, 'utf-8');
-    console.log(config);
   });
 
 program
@@ -526,57 +508,26 @@ program
       return;
     }
 
-    let installed = [];
-    let skipped = [];
+    const dependencies = [
+      { name: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-cli' },
+      { name: 'opencode', installCmd: 'npm install -g opencode' },
+      { name: 'jj', installCmd: 'brew install jj' },
+      { name: 'tmux', installCmd: 'brew install tmux' },
+      { name: 'bun', installCmd: 'curl -fsSL https://bun.sh/install | bash' }
+    ];
 
-    // Check/install claude
-    try {
-      execSync('which claude');
-      skipped.push('claude');
-    } catch {
-      console.log(chalk.gray('Installing claude...'));
-      execSync('npm install -g @anthropic-ai/claude-cli', { stdio: 'inherit' });
-      installed.push('claude');
-    }
+    let installed: string[] = [];
+    let skipped: string[] = [];
 
-    // Check/install opencode
-    try {
-      execSync('which opencode');
-      skipped.push('opencode');
-    } catch {
-      console.log(chalk.gray('Installing opencode...'));
-      execSync('npm install -g opencode', { stdio: 'inherit' });
-      installed.push('opencode');
-    }
-
-    // Check/install jj
-    try {
-      execSync('which jj');
-      skipped.push('jj');
-    } catch {
-      console.log(chalk.gray('Installing jj...'));
-      execSync('brew install jj', { stdio: 'inherit' });
-      installed.push('jj');
-    }
-
-    // Check/install tmux
-    try {
-      execSync('which tmux');
-      skipped.push('tmux');
-    } catch {
-      console.log(chalk.gray('Installing tmux...'));
-      execSync('brew install tmux', { stdio: 'inherit' });
-      installed.push('tmux');
-    }
-
-    // Check/install bun
-    try {
-      execSync('which bun');
-      skipped.push('bun');
-    } catch {
-      console.log(chalk.gray('Installing bun...'));
-      execSync('curl -fsSL https://bun.sh/install | bash', { stdio: 'inherit' });
-      installed.push('bun');
+    for (const dep of dependencies) {
+      try {
+        execSync(`which ${dep.name}`);
+        skipped.push(dep.name);
+      } catch {
+        console.log(chalk.gray(`Installing ${dep.name}...`));
+        execSync(dep.installCmd, { stdio: 'inherit' });
+        installed.push(dep.name);
+      }
     }
 
     console.log(chalk.green('\n✅ Dependency check complete!'));
@@ -595,12 +546,7 @@ program
     console.log(chalk.blue('\n📋 AgentMux Agents\n'));
     
     const session = getSessionName();
-    const fixedAgents = [
-      { pane: 0, name: 'status', harness: 'monitor', desc: 'Status Monitor' },
-      { pane: 1, name: 'nui', harness: 'opencode', desc: 'Agent Nui' },
-      { pane: 2, name: 'sam', harness: 'opencode', desc: 'Agent Sam' },
-      { pane: 3, name: 'wit', harness: 'claude', desc: 'Agent Wit' }
-    ];
+    const spawnedWindows: Array<{id: string, name: string, harness: string}> = [];
     
     try {
       // Get pane info from tmux
@@ -615,7 +561,7 @@ program
       }
       
       console.log(chalk.yellow('Fixed Panes:'));
-      fixedAgents.forEach(agent => {
+      AGENTS.forEach(agent => {
         const cmd = paneCommands[agent.pane.toString()] || 'not running';
         const status = cmd !== 'not running' ? chalk.green('● running') : chalk.gray('○ offline');
         
@@ -626,14 +572,13 @@ program
       // Get spawned windows
       try {
         const windowsOutput = exec(`tmux list-windows -t ${session} -F "#I: #W" 2>/dev/null`);
-        const spawnedWindows: Array<{id: string, name: string, harness: string}> = [];
         
         if (windowsOutput) {
           windowsOutput.trim().split('\n').forEach(line => {
             const [winId, ...nameParts] = line.split(':');
             const windowName = nameParts.join(':').trim();
             // Skip the main window (agentmux) and check if it's a spawned agent
-            if (windowName !== 'agentmux' && !fixedAgents.find(a => a.name === windowName)) {
+            if (windowName !== 'agentmux' && !AGENTS.find(a => a.name === windowName)) {
               // Try to determine harness from window name or default to unknown
               spawnedWindows.push({
                 id: winId.trim(),
@@ -652,8 +597,8 @@ program
         }
       } catch {}
       
-      const totalAgents = fixedAgents.length + (spawnedWindows?.length || 0);
-      console.log(chalk.gray(`\nTotal: ${totalAgents}/11 agents`));
+      const totalAgents = AGENTS.length + spawnedWindows.length;
+      console.log(chalk.gray(`\nTotal: ${totalAgents}/${MAX_AGENTS} agents`));
       console.log();
       
       console.log(chalk.gray('Quick commands:'));
@@ -683,7 +628,7 @@ program
 
 program
   .command('spawn <harness> <agent-name>')
-  .description('Spawn a new agent in a new tmux window (max 11 total agents)')
+  .description(`Spawn a new agent in a new tmux window (max ${MAX_AGENTS} total agents)`)
   .action((harness: string, agentName: string) => {
     if (!checkTmux()) return;
     
@@ -710,8 +655,8 @@ program
       const paneCount = execSync(`tmux list-panes -t ${session} | wc -l`, { encoding: 'utf-8' });
       const totalAgents = parseInt(windowCount.trim()) + parseInt(paneCount.trim()) - 1; // -1 for main window
       
-      if (totalAgents >= 11) {
-        console.log(chalk.red('\n❌ Agent limit reached (11 max). Kill an agent first.\n'));
+      if (totalAgents >= MAX_AGENTS) {
+        console.log(chalk.red(`\n❌ Agent limit reached (${MAX_AGENTS} max). Kill an agent first.\n`));
         return;
       }
     } catch {}
@@ -772,15 +717,9 @@ program
         return;
       } catch {
         // Not a window, check if it's a fixed pane agent
-        const paneMap: {[key: string]: number} = {
-          'nui': 1,
-          'sam': 2,
-          'wit': 3
-        };
-        
-        if (paneMap[agentName] !== undefined) {
+        if (AGENT_PANE_MAP[agentName] !== undefined) {
           // Kill the pane
-          execSync(`tmux kill-pane -t ${session}:0.${paneMap[agentName]}`);
+          execSync(`tmux kill-pane -t ${session}:0.${AGENT_PANE_MAP[agentName]}`);
           console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
           return;
         }
@@ -794,5 +733,3 @@ program
   });
 
 program.parse();
-
-export {};

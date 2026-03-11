@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 // @bun
+import { createRequire } from "node:module";
 var __create = Object.create;
 var __getProtoOf = Object.getPrototypeOf;
 var __defProp = Object.defineProperty;
@@ -17,7 +18,7 @@ var __toESM = (mod, isNodeMode, target) => {
   return to;
 };
 var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
-var __require = import.meta.require;
+var __require = /* @__PURE__ */ createRequire(import.meta.url);
 
 // node_modules/commander/lib/error.js
 var require_error = __commonJS((exports) => {
@@ -342,7 +343,7 @@ var require_help = __commonJS((exports) => {
       return Math.max(helper.longestOptionTermLength(cmd, helper), helper.longestGlobalOptionTermLength(cmd, helper), helper.longestSubcommandTermLength(cmd, helper), helper.longestArgumentTermLength(cmd, helper));
     }
     wrap(str, width, indent, minColumnWidth = 40) {
-      const indents = " \\f\\t\\v\xA0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF";
+      const indents = " \\f\\t\\v   -   　\uFEFF";
       const manualIndent = new RegExp(`[\\n][${indents}]+`);
       if (str.match(manualIndent))
         return str;
@@ -354,7 +355,7 @@ var require_help = __commonJS((exports) => {
 `, `
 `);
       const indentString = " ".repeat(indent);
-      const zeroWidthSpace = "\u200B";
+      const zeroWidthSpace = "​";
       const breaks = `\\s${zeroWidthSpace}`;
       const regex = new RegExp(`
 |.{1,${columnWidth - 1}}([${breaks}]|$)|[^${breaks}]+?([${breaks}]|$)`, "g");
@@ -597,11 +598,11 @@ var require_suggestSimilar = __commonJS((exports) => {
 
 // node_modules/commander/lib/command.js
 var require_command = __commonJS((exports) => {
-  var EventEmitter = __require("events").EventEmitter;
-  var childProcess = __require("child_process");
-  var path = __require("path");
-  var fs = __require("fs");
-  var process2 = __require("process");
+  var EventEmitter = __require("node:events").EventEmitter;
+  var childProcess = __require("node:child_process");
+  var path = __require("node:path");
+  var fs = __require("node:fs");
+  var process2 = __require("node:process");
   var { Argument, humanReadableArgName } = require_argument();
   var { CommanderError } = require_error();
   var { Help } = require_help();
@@ -2052,9 +2053,9 @@ var ansiStyles = assembleStyles();
 var ansi_styles_default = ansiStyles;
 
 // node_modules/chalk/source/vendor/supports-color/index.js
-import process2 from "process";
-import os from "os";
-import tty from "tty";
+import process2 from "node:process";
+import os from "node:os";
+import tty from "node:tty";
 function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : process2.argv) {
   const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
   const position = argv.indexOf(prefix + flag);
@@ -2364,12 +2365,27 @@ var chalkStderr = createChalk({ level: stderrColor ? stderrColor.level : 0 });
 var source_default = chalk;
 
 // src/index.ts
-import { spawn } from "child_process";
+import { spawn, execFileSync } from "child_process";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 var program2 = new Command;
+var MAX_AGENTS = 11;
+var STATUS_REFRESH_INTERVAL_MS = 3000;
+var STATUS_REFRESH_INTERVAL_S = 3;
+var AGENTS = [
+  { name: "status", pane: 0, harness: "monitor", cmd: "", enabled: true },
+  { name: "nui", pane: 1, harness: "opencode", cmd: "opencode", enabled: true },
+  { name: "sam", pane: 2, harness: "opencode", cmd: "opencode", enabled: true },
+  { name: "wit", pane: 3, harness: "claude", cmd: "claude", enabled: true }
+];
+var AGENT_PANE_MAP = {
+  status: 0,
+  nui: 1,
+  sam: 2,
+  wit: 3
+};
 function getAgentMuxDir() {
   return path.join(process.cwd(), ".agentmux");
 }
@@ -2404,8 +2420,7 @@ function getSessionName() {
 function getJJStateHash(agentMuxDir) {
   try {
     const jjDir = path.join(agentMuxDir, ".jj");
-    if (!fs.existsSync(jjDir))
-      return "no-repo";
+    fs.accessSync(jjDir, fs.constants.F_OK);
     const projectRoot = path.dirname(agentMuxDir);
     const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
       cwd: projectRoot,
@@ -2413,7 +2428,7 @@ function getJJStateHash(agentMuxDir) {
     });
     return crypto.createHash("md5").update(log).digest("hex");
   } catch {
-    return "error";
+    return "no-repo";
   }
 }
 program2.name("agentmux").description("Ultra-lean multi-agent terminal multiplexer").version("3.0.0");
@@ -2459,12 +2474,13 @@ program2.command("init").description("Initialize a new AgentMux project in curre
   console.log(source_default.blue(`\uD83C\uDF0A Initializing AgentMux project: ${name}`));
   console.log(source_default.gray(`   Location: ${currentDir}/.agentmux/
 `));
-  if (fs.existsSync(agentMuxDir)) {
+  try {
+    fs.accessSync(agentMuxDir, fs.constants.F_OK);
     console.log(source_default.yellow("\u26A0\uFE0F  .agentmux/ already exists in this directory"));
     console.log(source_default.gray(`   Use: rm -rf .agentmux && agentmux init to reinitialize
 `));
     return;
-  }
+  } catch {}
   fs.mkdirSync(agentMuxDir, { recursive: true });
   fs.mkdirSync(path.join(agentMuxDir, "shared"), { recursive: true });
   fs.mkdirSync(path.join(agentMuxDir, "skills"), { recursive: true });
@@ -2479,34 +2495,19 @@ program2.command("init").description("Initialize a new AgentMux project in curre
     console.log(source_default.yellow(`
 \u26A0\uFE0F  JJ not installed. Install with: brew install jj`));
   }
-  const config = `# AgentMux Project Config
-[project]
-name = "${name}"
-created_at = "${new Date().toISOString()}"
-
-[agents]
-kimi = { enabled = true }
-minimax = { enabled = true }
-claude = { enabled = true }
-
-[settings]
-auto_refresh_interval = 3
-show_idle_indicator = true
-`;
-  fs.writeFileSync(path.join(agentMuxDir, "config.toml"), config);
   fs.writeFileSync(path.join(agentMuxDir, "shared", "plan.md"), `# Plan for ${name}
 
 Add your multi-agent plan here.
 Use @agent tags to assign tasks.
 
-## @kimi
-Design the architecture
+## @nui
+Design the architecture and plan implementation
 
-## @minimax
-Implement the code
+## @sam
+Implement the core functionality
 
-## @claude
-Review and test
+## @wit
+Review and test the implementation
 `);
   fs.writeFileSync(path.join(agentMuxDir, "shared", "messages.txt"), `# Messages for ${name}
 
@@ -2517,7 +2518,6 @@ Review and test
 Directory structure:`));
   console.log(source_default.white("   .agentmux/"));
   console.log(source_default.white("   \u251C\u2500\u2500 .jj/              # JJ version control"));
-  console.log(source_default.white("   \u251C\u2500\u2500 config.toml       # Project config"));
   console.log(source_default.white("   \u2514\u2500\u2500 shared/           # Shared context"));
   console.log(source_default.gray(`
 Skills are installed globally in ~/.claude/skills/`));
@@ -2534,7 +2534,9 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
     return;
   }
   const agentMuxDir = getAgentMuxDir();
-  if (!fs.existsSync(agentMuxDir)) {
+  try {
+    fs.accessSync(agentMuxDir, fs.constants.F_OK);
+  } catch {
     console.log(source_default.red(`
 \u274C No .agentmux/ directory found!`));
     console.log(source_default.white(`Run: agentmux init
@@ -2563,30 +2565,17 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   execSync(`tmux select-pane -t ${session}:0.0`);
   execSync(`tmux select-pane -t ${session}:0.0 -T "status"`);
   execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
-  if (options.nui) {
-    console.log(source_default.gray("Starting nui..."));
-    execSync(`tmux select-pane -t ${session}:0.1`);
-    execSync(`tmux select-pane -t ${session}:0.1 -T "nui (opencode)"`);
-    execSync(`tmux send-keys -t ${session}:0.1 "clear" C-m`);
-    const nuiCmd = `AGENTMUX_AGENT=nui AGENTMUX_PROJECT=${currentDir} opencode`;
-    execSync(`tmux send-keys -t ${session}:0.1 "${nuiCmd}" C-m`);
-  }
-  if (options.sam) {
-    console.log(source_default.gray("Starting sam..."));
-    execSync(`tmux select-pane -t ${session}:0.2`);
-    execSync(`tmux select-pane -t ${session}:0.2 -T "sam (opencode)"`);
-    execSync(`tmux send-keys -t ${session}:0.2 "clear" C-m`);
-    const samCmd = `AGENTMUX_AGENT=sam AGENTMUX_PROJECT=${currentDir} opencode`;
-    execSync(`tmux send-keys -t ${session}:0.2 "${samCmd}" C-m`);
-  }
-  if (options.wit) {
-    console.log(source_default.gray("Starting wit..."));
-    execSync(`tmux select-pane -t ${session}:0.3`);
-    execSync(`tmux select-pane -t ${session}:0.3 -T "wit (claude)"`);
-    execSync(`tmux send-keys -t ${session}:0.3 "clear" C-m`);
-    const witCmd = `AGENTMUX_AGENT=wit AGENTMUX_PROJECT=${currentDir} claude`;
-    execSync(`tmux send-keys -t ${session}:0.3 "${witCmd}" C-m`);
-  }
+  AGENTS.filter((a) => a.name !== "status").forEach((agent) => {
+    const optionKey = agent.name;
+    if (options[optionKey]) {
+      console.log(source_default.gray(`Starting ${agent.name}...`));
+      execSync(`tmux select-pane -t ${session}:0.${agent.pane}`);
+      execSync(`tmux select-pane -t ${session}:0.${agent.pane} -T "${agent.name} (${agent.harness})"`);
+      execSync(`tmux send-keys -t ${session}:0.${agent.pane} "clear" C-m`);
+      const agentCmd = `AGENTMUX_AGENT=${agent.name} AGENTMUX_PROJECT=${currentDir} ${agent.cmd}`;
+      execSync(`tmux send-keys -t ${session}:0.${agent.pane} "${agentCmd}" C-m`);
+    }
+  });
   execSync(`tmux select-layout -t ${session} tiled`);
   console.log(source_default.green(`
 \u2705 AgentMux environment ready!`));
@@ -2610,13 +2599,16 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
 });
 program2.command("status").description("Show live status with auto-refresh (runs until Ctrl+C)").action(() => {
   const agentMuxDir = getAgentMuxDir();
-  if (!fs.existsSync(agentMuxDir)) {
+  try {
+    fs.accessSync(agentMuxDir, fs.constants.F_OK);
+  } catch {
     console.log(source_default.red(`
 \u274C No .agentmux/ directory found!`));
     console.log(source_default.white(`Run: agentmux init
 `));
     return;
   }
+  const hasJJ = checkJJ();
   let lastState = "";
   let lastUpdateTime = Date.now();
   function renderStatus() {
@@ -2629,10 +2621,11 @@ program2.command("status").description("Show live status with auto-refresh (runs
 
 `);
     console.log(source_default.yellow("JJ Changes:"));
-    if (checkJJ()) {
+    if (hasJJ) {
       try {
         const jjDir = path.join(agentMuxDir, ".jj");
-        if (fs.existsSync(jjDir)) {
+        try {
+          fs.accessSync(jjDir, fs.constants.F_OK);
           const projectRoot = path.dirname(agentMuxDir);
           const log = exec('jj log --no-graph --template "change_id.short() ++ " " ++ description\\n" 2>/dev/null || echo "  No changes yet"', {
             cwd: projectRoot
@@ -2642,7 +2635,7 @@ program2.command("status").description("Show live status with auto-refresh (runs
           } else {
             console.log(source_default.gray("  No changes yet"));
           }
-        } else {
+        } catch {
           console.log(source_default.gray("  JJ repo initializing..."));
         }
       } catch (e) {
@@ -2657,10 +2650,11 @@ Active Agents:`));
       const session = getSessionName();
       const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
       if (output) {
-        const panes = ["Status", "nui (opencode)", "sam (opencode)", "wit (claude)"];
-        output.trim().split(`
-`).forEach((line, idx) => {
-          const paneName = panes[idx] || `Pane ${idx}`;
+        const lines = output.trim().split(`
+`);
+        lines.forEach((line, idx) => {
+          const agent = AGENTS[idx];
+          const paneName = agent ? `${agent.name} (${agent.harness})` : `Pane ${idx}`;
           const cmd = line.split(":")[1]?.trim() || "idle";
           console.log(`  \u2022 ${paneName}: ${cmd}`);
         });
@@ -2674,34 +2668,39 @@ Active Agents:`));
 Recent Messages:`));
     try {
       const messagesPath = path.join(agentMuxDir, "shared", "messages.txt");
-      if (fs.existsSync(messagesPath)) {
-        const messages = fs.readFileSync(messagesPath, "utf-8");
-        const lines = messages.split(`
+      try {
+        fs.accessSync(messagesPath, fs.constants.F_OK);
+        const tailOutput = exec(`tail -n 5 "${messagesPath}" 2>/dev/null`);
+        if (tailOutput) {
+          const lines = tailOutput.trim().split(`
 `).filter((l) => l.trim() && !l.startsWith("#"));
-        if (lines.length > 0) {
-          lines.slice(-5).forEach((line) => {
-            const match = line.match(/^\[(.*?)\] (.*)$/);
-            if (match) {
-              const timestamp = new Date(match[1]);
-              const msg = match[2];
-              const ago = Math.floor((Date.now() - timestamp.getTime()) / 1000);
-              const timeStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago / 60)}m ago` : `${Math.floor(ago / 3600)}h ago`;
-              console.log(`  ${source_default.gray(`[${timeStr}]`)} ${msg}`);
-            } else {
-              console.log(`  ${line}`);
-            }
-          });
+          if (lines.length > 0) {
+            lines.forEach((line) => {
+              const match = line.match(/^\[(.*?)\] (.*)$/);
+              if (match) {
+                const timestamp = new Date(match[1]);
+                const msg = match[2];
+                const ago = Math.floor((Date.now() - timestamp.getTime()) / 1000);
+                const timeStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago / 60)}m ago` : `${Math.floor(ago / 3600)}h ago`;
+                console.log(`  ${source_default.gray(`[${timeStr}]`)} ${msg}`);
+              } else {
+                console.log(`  ${line}`);
+              }
+            });
+          } else {
+            console.log(source_default.gray("  No messages yet"));
+          }
         } else {
-          console.log(source_default.gray("  No messages yet"));
+          console.log(source_default.gray("  No messages"));
         }
-      } else {
+      } catch {
         console.log(source_default.gray("  No messages"));
       }
     } catch {
       console.log(source_default.gray("  No messages"));
     }
     console.log(source_default.gray(`
-  [Auto-refreshes every 3s... Press Ctrl+C to exit]
+  [Auto-refreshes every ${STATUS_REFRESH_INTERVAL_S}s... Press Ctrl+C to exit]
 `));
   }
   renderStatus();
@@ -2712,7 +2711,7 @@ Recent Messages:`));
       lastUpdateTime = Date.now();
     }
     renderStatus();
-  }, 3000);
+  }, STATUS_REFRESH_INTERVAL_MS);
   process.on("SIGINT", () => {
     clearInterval(pollInterval);
     console.log(source_default.gray(`
@@ -2721,7 +2720,6 @@ Recent Messages:`));
 `));
     process.exit(0);
   });
-  setInterval(() => {}, 1000);
 });
 program2.command("send <to> <message...>").description("Send a message to another agent (uses tmux send-keys)").action((to, message) => {
   if (!checkTmux())
@@ -2733,17 +2731,10 @@ program2.command("send <to> <message...>").description("Send a message to anothe
   const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}`;
   const timestamp = new Date().toISOString();
   try {
-    const paneMap = {
-      status: 0,
-      nui: 1,
-      sam: 2,
-      wit: 3
-    };
-    const paneNum = paneMap[to.toLowerCase()];
+    const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
     if (paneNum !== undefined) {
-      const escaped = displayMsg.replace(/'/g, "'\\''");
-      execSync(`tmux send-keys -t ${session}:0.${paneNum} -l '${escaped}'`);
-      execSync(`tmux send-keys -t ${session}:0.${paneNum} Enter`);
+      execFileSync("tmux", ["send-keys", "-t", `${session}:0.${paneNum}`, "-l", displayMsg]);
+      execFileSync("tmux", ["send-keys", "-t", `${session}:0.${paneNum}`, "Enter"]);
       console.log(source_default.green(`\u2705 Message sent to ${to}`));
       const messagesPath = path.join(agentMuxDir, "shared", "messages.txt");
       const logEntry = `[${timestamp}] ${displayMsg}
@@ -2755,21 +2746,6 @@ program2.command("send <to> <message...>").description("Send a message to anothe
   } catch (e) {
     console.log(source_default.red(`\u274C Failed to send to ${to}. Is the session running?`));
   }
-});
-program2.command("config").description("Show current project configuration").action(() => {
-  const agentMuxDir = getAgentMuxDir();
-  const configPath = path.join(agentMuxDir, "config.toml");
-  if (!fs.existsSync(configPath)) {
-    console.log(source_default.red(`
-\u274C No config found. Run: agentmux init <project>
-`));
-    return;
-  }
-  console.log(source_default.blue(`
-\u2699\uFE0F  AgentMux Configuration
-`));
-  const config = fs.readFileSync(configPath, "utf-8");
-  console.log(config);
 });
 program2.command("install-deps").description("Install all required dependencies (claude, opencode, jj, tmux, bun)").action(() => {
   console.log(source_default.blue(`\uD83D\uDD27 Installing AgentMux dependencies...
@@ -2785,47 +2761,24 @@ program2.command("install-deps").description("Install all required dependencies 
     console.log(source_default.white("   - bun: curl -fsSL https://bun.sh/install | bash"));
     return;
   }
+  const dependencies = [
+    { name: "claude", installCmd: "npm install -g @anthropic-ai/claude-cli" },
+    { name: "opencode", installCmd: "npm install -g opencode" },
+    { name: "jj", installCmd: "brew install jj" },
+    { name: "tmux", installCmd: "brew install tmux" },
+    { name: "bun", installCmd: "curl -fsSL https://bun.sh/install | bash" }
+  ];
   let installed = [];
   let skipped = [];
-  try {
-    execSync("which claude");
-    skipped.push("claude");
-  } catch {
-    console.log(source_default.gray("Installing claude..."));
-    execSync("npm install -g @anthropic-ai/claude-cli", { stdio: "inherit" });
-    installed.push("claude");
-  }
-  try {
-    execSync("which opencode");
-    skipped.push("opencode");
-  } catch {
-    console.log(source_default.gray("Installing opencode..."));
-    execSync("npm install -g opencode", { stdio: "inherit" });
-    installed.push("opencode");
-  }
-  try {
-    execSync("which jj");
-    skipped.push("jj");
-  } catch {
-    console.log(source_default.gray("Installing jj..."));
-    execSync("brew install jj", { stdio: "inherit" });
-    installed.push("jj");
-  }
-  try {
-    execSync("which tmux");
-    skipped.push("tmux");
-  } catch {
-    console.log(source_default.gray("Installing tmux..."));
-    execSync("brew install tmux", { stdio: "inherit" });
-    installed.push("tmux");
-  }
-  try {
-    execSync("which bun");
-    skipped.push("bun");
-  } catch {
-    console.log(source_default.gray("Installing bun..."));
-    execSync("curl -fsSL https://bun.sh/install | bash", { stdio: "inherit" });
-    installed.push("bun");
+  for (const dep of dependencies) {
+    try {
+      execSync(`which ${dep.name}`);
+      skipped.push(dep.name);
+    } catch {
+      console.log(source_default.gray(`Installing ${dep.name}...`));
+      execSync(dep.installCmd, { stdio: "inherit" });
+      installed.push(dep.name);
+    }
   }
   console.log(source_default.green(`
 \u2705 Dependency check complete!`));
@@ -2841,12 +2794,7 @@ program2.command("list").description("List all agents with their status and harn
 \uD83D\uDCCB AgentMux Agents
 `));
   const session = getSessionName();
-  const fixedAgents = [
-    { pane: 0, name: "status", harness: "monitor", desc: "Status Monitor" },
-    { pane: 1, name: "nui", harness: "opencode", desc: "Agent Nui" },
-    { pane: 2, name: "sam", harness: "opencode", desc: "Agent Sam" },
-    { pane: 3, name: "wit", harness: "claude", desc: "Agent Wit" }
-  ];
+  const spawnedWindows = [];
   try {
     const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
     const paneCommands = {};
@@ -2858,7 +2806,7 @@ program2.command("list").description("List all agents with their status and harn
       });
     }
     console.log(source_default.yellow("Fixed Panes:"));
-    fixedAgents.forEach((agent) => {
+    AGENTS.forEach((agent) => {
       const cmd = paneCommands[agent.pane.toString()] || "not running";
       const status = cmd !== "not running" ? source_default.green("\u25CF running") : source_default.gray("\u25CB offline");
       console.log(`  Pane ${agent.pane}: ${source_default.bold(agent.name)} (${agent.harness}) - ${status}`);
@@ -2866,14 +2814,13 @@ program2.command("list").description("List all agents with their status and harn
     });
     try {
       const windowsOutput = exec(`tmux list-windows -t ${session} -F "#I: #W" 2>/dev/null`);
-      const spawnedWindows2 = [];
       if (windowsOutput) {
         windowsOutput.trim().split(`
 `).forEach((line) => {
           const [winId, ...nameParts] = line.split(":");
           const windowName = nameParts.join(":").trim();
-          if (windowName !== "agentmux" && !fixedAgents.find((a) => a.name === windowName)) {
-            spawnedWindows2.push({
+          if (windowName !== "agentmux" && !AGENTS.find((a) => a.name === windowName)) {
+            spawnedWindows.push({
               id: winId.trim(),
               name: windowName,
               harness: "unknown"
@@ -2881,17 +2828,17 @@ program2.command("list").description("List all agents with their status and harn
           }
         });
       }
-      if (spawnedWindows2.length > 0) {
+      if (spawnedWindows.length > 0) {
         console.log(source_default.yellow(`
 Spawned Windows:`));
-        spawnedWindows2.forEach((win) => {
+        spawnedWindows.forEach((win) => {
           console.log(`  Window ${win.id}: ${source_default.bold(win.name)} (${win.harness}) - ${source_default.green("\u25CF running")}`);
         });
       }
     } catch {}
-    const totalAgents = fixedAgents.length + (spawnedWindows?.length || 0);
+    const totalAgents = AGENTS.length + spawnedWindows.length;
     console.log(source_default.gray(`
-Total: ${totalAgents}/11 agents`));
+Total: ${totalAgents}/${MAX_AGENTS} agents`));
     console.log();
     console.log(source_default.gray("Quick commands:"));
     console.log(`  ${source_default.cyan('agentmux send nui "message"')}  - Send to nui`);
@@ -2917,7 +2864,7 @@ program2.command("stop").description("Stop the AgentMux tmux session").action(()
 `));
   }
 });
-program2.command("spawn <harness> <agent-name>").description("Spawn a new agent in a new tmux window (max 11 total agents)").action((harness, agentName) => {
+program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent in a new tmux window (max ${MAX_AGENTS} total agents)`).action((harness, agentName) => {
   if (!checkTmux())
     return;
   if (harness !== "opencode" && harness !== "claude") {
@@ -2940,9 +2887,9 @@ program2.command("spawn <harness> <agent-name>").description("Spawn a new agent 
     const windowCount = execSync(`tmux list-windows -t ${session} | wc -l`, { encoding: "utf-8" });
     const paneCount = execSync(`tmux list-panes -t ${session} | wc -l`, { encoding: "utf-8" });
     const totalAgents = parseInt(windowCount.trim()) + parseInt(paneCount.trim()) - 1;
-    if (totalAgents >= 11) {
+    if (totalAgents >= MAX_AGENTS) {
       console.log(source_default.red(`
-\u274C Agent limit reached (11 max). Kill an agent first.
+\u274C Agent limit reached (${MAX_AGENTS} max). Kill an agent first.
 `));
       return;
     }
@@ -2994,13 +2941,8 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
 `));
       return;
     } catch {
-      const paneMap = {
-        nui: 1,
-        sam: 2,
-        wit: 3
-      };
-      if (paneMap[agentName] !== undefined) {
-        execSync(`tmux kill-pane -t ${session}:0.${paneMap[agentName]}`);
+      if (AGENT_PANE_MAP[agentName] !== undefined) {
+        execSync(`tmux kill-pane -t ${session}:0.${AGENT_PANE_MAP[agentName]}`);
         console.log(source_default.green(`\u2705 Agent "${agentName}" killed
 `));
         return;
