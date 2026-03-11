@@ -62,37 +62,22 @@ JJ is colocated with git. Using `git commit` creates git commits that JJ doesn't
 
 ### The AgentMux Workflow
 
+**For simple commits (no PR needed):**
 ```bash
-# 1. Make changes - edit files normally
-# 2. Create JJ change (this is your "commit")
+# 1. Make changes
+# 2. Create JJ change
 jj new -m "@$AGENTMUX_AGENT: what you did"
 
-# 3. Push to GitHub (creates branch automatically)
+# 3. Push to GitHub
 jj git push
-
-# 4. Create PR
-gh pr create --title "..." --body "..."
 ```
 
-### Common Mistake to Avoid
-
-❌ **DON'T:** `git add . && git commit -m "message"`
-✅ **DO:** `jj new -m "@nui: message"`
-
-The status pane shows JJ working copy changes (refreshes every 3 seconds). If you use git directly, other agents won't see your work in progress.
-
-## Creating Pull Requests
-
-JJ and git maintain separate commit histories. To avoid "no common history" errors when creating PRs, always create a git branch first:
-
-### The Complete Workflow
-
+**For pull requests (create git branch first):**
 ```bash
 # 1. Create git branch first (ensures proper ancestry with main)
 git checkout -b feature-name
 
-# 2. Make your changes...
-
+# 2. Make changes
 # 3. Create JJ change
 jj new -m "@$AGENTMUX_AGENT: description"
 
@@ -106,23 +91,28 @@ jj git push
 gh pr create --title "..." --body "..."
 ```
 
-### Why This Works
+### Why Create Git Branch First for PRs?
 
-Creating the git branch first ensures:
+JJ and git maintain separate commit histories. Creating a git branch first ensures:
 - Branch shares ancestry with `main`
 - GitHub recognizes common history
 - No "entirely different commit history" errors
 - Clean PR creation with `gh pr create`
 
-### What NOT To Do
+### Common Mistakes to Avoid
 
-❌ DON'T: Create JJ bookmark without git branch first
+❌ **DON'T use git commit:** `git add . && git commit -m "message"`  
+✅ **DO use JJ:** `jj new -m "@nui: message"`
+
+❌ **DON'T create JJ bookmark without git branch first:**
 ```bash
 jj new -m "@nui: feature"
 jj bookmark create feature  # History diverges from main!
 jj git push                 # Pushes with no common ancestor
 gh pr create                # Fails: no common history
 ```
+
+The status pane shows JJ working copy changes (refreshes every 3 seconds). If you use git directly, other agents won't see your work in progress.
 
 ## Tips
 
