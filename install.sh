@@ -1,49 +1,31 @@
 #!/bin/bash
 set -e
 
-# AgentMux One-Liner Installer for macOS and Linux
+# AgentMux One-Liner Installer
+# Supports: macOS, Linux (apt, dnf, yum)
 # Usage: curl -fsSL https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/install.sh | bash
 
 echo "🔧 AgentMux Installer"
 echo "====================="
 echo ""
 
-# Detect OS
-OS="unknown"
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    OS="macos"
-    echo "Detected: macOS"
-elif [[ "$OSTYPE" == "linux"* ]]; then
-    OS="linux"
-    echo "Detected: Linux"
+# Detect available package manager
+PKG_MANAGER=""
+if command -v brew &> /dev/null; then
+    PKG_MANAGER="brew"
+    echo "Using: Homebrew"
+elif command -v apt-get &> /dev/null; then
+    PKG_MANAGER="apt"
+    echo "Using: apt (Debian/Ubuntu)"
+elif command -v dnf &> /dev/null; then
+    PKG_MANAGER="dnf"
+    echo "Using: dnf (Fedora/RHEL 8+)"
+elif command -v yum &> /dev/null; then
+    PKG_MANAGER="yum"
+    echo "Using: yum (RHEL/CentOS)"
 else
-    echo "❌ Unsupported OS: $OSTYPE"
-    echo "This installer supports macOS and Linux only."
-    exit 1
-fi
-
-# Check for package manager
-if [[ "$OS" == "macos" ]]; then
-    if ! command -v brew &> /dev/null; then
-        echo "❌ Homebrew not found. Please install it first:"
-        echo "   /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-        exit 1
-    fi
-elif [[ "$OS" == "linux" ]]; then
-    # Check for apt (Debian/Ubuntu) or yum/dnf (RHEL/Fedora)
-    if command -v apt-get &> /dev/null; then
-        PKG_MANAGER="apt"
-        echo "Using: apt (Debian/Ubuntu)"
-    elif command -v dnf &> /dev/null; then
-        PKG_MANAGER="dnf"
-        echo "Using: dnf (Fedora/RHEL 8+)"
-    elif command -v yum &> /dev/null; then
-        PKG_MANAGER="yum"
-        echo "Using: yum (RHEL/CentOS)"
-    else
-        echo "❌ No supported package manager found (apt, dnf, or yum)"
-        exit 1
-    fi
+    echo "⚠️  No package manager found (brew, apt, dnf, or yum)"
+    echo "   Will try to install via direct methods..."
 fi
 
 echo ""
@@ -59,40 +41,45 @@ if check_installed jj; then
     echo "  ✓ jj already installed"
 else
     echo "  → Installing jj..."
-    if [[ "$OS" == "macos" ]]; then
+    if [[ "$PKG_MANAGER" == "brew" ]]; then
         brew install jj
-    elif [[ "$OS" == "linux" ]]; then
-        # Try to install via package manager first
-        if [[ "$PKG_MANAGER" == "apt" ]]; then
-            # jj is in Debian/Ubuntu repos as jujutsu
-            sudo apt-get update && sudo apt-get install -y jujutsu || {
-                echo "    Package manager install failed, trying cargo..."
-                if ! check_installed cargo; then
-                    echo "    Installing Rust first..."
-                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    source "$HOME/.cargo/env"
-                fi
-                cargo install jj-cli
-            }
-        elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-            sudo dnf install -y jj || {
-                echo "    Package manager install failed, trying cargo..."
-                if ! check_installed cargo; then
-                    echo "    Installing Rust first..."
-                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    source "$HOME/.cargo/env"
-                fi
-                cargo install jj-cli
-            }
-        elif [[ "$PKG_MANAGER" == "yum" ]]; then
-            # yum usually doesn't have jj, use cargo
+    elif [[ "$PKG_MANAGER" == "apt" ]]; then
+        # jj is in Debian/Ubuntu repos as jujutsu
+        sudo apt-get update && sudo apt-get install -y jujutsu || {
+            echo "    Package manager install failed, trying cargo..."
             if ! check_installed cargo; then
                 echo "    Installing Rust first..."
                 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
                 source "$HOME/.cargo/env"
             fi
             cargo install jj-cli
+        }
+    elif [[ "$PKG_MANAGER" == "dnf" ]]; then
+        sudo dnf install -y jj || {
+            echo "    Package manager install failed, trying cargo..."
+            if ! check_installed cargo; then
+                echo "    Installing Rust first..."
+                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                source "$HOME/.cargo/env"
+            fi
+            cargo install jj-cli
+        }
+    elif [[ "$PKG_MANAGER" == "yum" ]]; then
+        # yum usually doesn't have jj, use cargo
+        if ! check_installed cargo; then
+            echo "    Installing Rust first..."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            source "$HOME/.cargo/env"
         fi
+        cargo install jj-cli
+    else
+        # No package manager - try cargo directly
+        if ! check_installed cargo; then
+            echo "    Installing Rust first..."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            source "$HOME/.cargo/env"
+        fi
+        cargo install jj-cli
     fi
 fi
 
@@ -101,16 +88,20 @@ if check_installed tmux; then
     echo "  ✓ tmux already installed"
 else
     echo "  → Installing tmux..."
-    if [[ "$OS" == "macos" ]]; then
+    if [[ "$PKG_MANAGER" == "brew" ]]; then
         brew install tmux
-    elif [[ "$OS" == "linux" ]]; then
-        if [[ "$PKG_MANAGER" == "apt" ]]; then
-            sudo apt-get update && sudo apt-get install -y tmux
-        elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-            sudo dnf install -y tmux
-        elif [[ "$PKG_MANAGER" == "yum" ]]; then
-            sudo yum install -y tmux
-        fi
+    elif [[ "$PKG_MANAGER" == "apt" ]]; then
+        sudo apt-get update && sudo apt-get install -y tmux
+    elif [[ "$PKG_MANAGER" == "dnf" ]]; then
+        sudo dnf install -y tmux
+    elif [[ "$PKG_MANAGER" == "yum" ]]; then
+        sudo yum install -y tmux
+    else
+        echo "❌ tmux is required but no package manager available"
+        echo "   Please install tmux manually:"
+        echo "   - Debian/Ubuntu: sudo apt-get install tmux"
+        echo "   - RHEL/CentOS: sudo yum install tmux"
+        exit 1
     fi
 fi
 
@@ -196,4 +187,3 @@ echo ""
 echo "🚀 Starting AgentMux..."
 echo ""
 "$HOME/.local/bin/agentmux" start
-
