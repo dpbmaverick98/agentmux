@@ -2741,8 +2741,8 @@ program2.command("send <to> <message...>").description("Send a message to anothe
     };
     const paneNum = paneMap[to.toLowerCase()];
     if (paneNum !== undefined) {
-      execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, "\\\"")}
-"'`);
+      const escaped = displayMsg.replace(/'/g, "'\\''");
+      execSync(`tmux send-keys -t ${session}:0.${paneNum} -l '${escaped}'`);
       execSync(`tmux send-keys -t ${session}:0.${paneNum} Enter`);
       console.log(source_default.green(`\u2705 Message sent to ${to}`));
       const messagesPath = path.join(agentMuxDir, "shared", "messages.txt");

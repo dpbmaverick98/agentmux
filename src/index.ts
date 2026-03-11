@@ -473,9 +473,9 @@ program
       const paneNum = paneMap[to.toLowerCase()];
 
       if (paneNum !== undefined) {
-        // Send message using printf to avoid echo interpretation issues
-        // Send command and Enter separately - C-m doesn't work when bundled
-        execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, '\\"')}\n"'`);
+        // Send message as literal text into the agent's chat input
+        const escaped = displayMsg.replace(/'/g, "'\\''");
+        execSync(`tmux send-keys -t ${session}:0.${paneNum} -l '${escaped}'`);
         execSync(`tmux send-keys -t ${session}:0.${paneNum} Enter`);
         console.log(chalk.green(`✅ Message sent to ${to}`));
         
