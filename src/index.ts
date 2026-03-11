@@ -170,20 +170,6 @@ program
       try {
         execSync('jj git init', { cwd: agentMuxDir });
         console.log(chalk.green('  ✓ JJ initialized in .agentmux/.jj/'));
-
-        // Create symlink in project root for easier JJ access
-        try {
-          const projectRoot = path.dirname(agentMuxDir);
-          const jjSymlinkPath = path.join(projectRoot, '.jj');
-          try {
-            fs.accessSync(jjSymlinkPath);
-          } catch {
-            fs.symlinkSync('.agentmux/.jj', jjSymlinkPath);
-            console.log(chalk.green('  ✓ Created .jj symlink for easier access'));
-          }
-        } catch (e) {
-          // Non-fatal - JJ still works from .agentmux/
-        }
       } catch (e) {
         console.log(chalk.yellow('  ⚠️  Failed to initialize JJ'));
       }
@@ -246,20 +232,8 @@ program
       return;
     }
 
-    // Ensure symlink exists (in case user deleted it)
-    const currentDir = process.cwd();
-    try {
-      const jjSymlinkPath = path.join(currentDir, '.jj');
-      fs.accessSync(jjSymlinkPath);
-    } catch {
-      try {
-        fs.symlinkSync('.agentmux/.jj', path.join(currentDir, '.jj'));
-      } catch {
-        // Ignore errors, not critical
-      }
-    }
-
     const session = getSessionName();
+    const currentDir = process.cwd();
 
     console.log(chalk.blue('🌊 Starting AgentMux environment...\n'));
 
@@ -376,13 +350,80 @@ program
             fs.accessSync(jjDir, fs.constants.F_OK);
             // Run jj from the project root (parent of .agentmux/)
             const projectRoot = path.dirname(agentMuxDir);
-            const log = exec('jj log --no-graph --template "change_id.short() ++ \" \" ++ description\\n" 2>/dev/null || echo "  No changes yet"', {
+            
+            // Get last 10 commits with author info
+            const logOutput = exec('jj log --no-graph -r "ancestors(@) | heads(all())" --limit 10 2>/dev/null || echo ""', {
               cwd: projectRoot
             });
-            if (log && log.trim()) {
-              console.log(log);
+            
+            // Get bookmarks to check push status
+            const bookmarksOutput = exec('jj bookmark list --all 2>/dev/null || echo ""', {
+              cwd: projectRoot
+            });
+            
+            // Parse bookmarks to find which commits are on remote
+            const pushedCommitIds = new Set<string>();
+            if (bookmarksOutput) {
+              bookmarksOutput.split('\n').forEach(line => {
+                // Parse lines like: "fix-jj-symlink: fed4b02d [origin (ahead by 2)]"
+                const match = line.match(/^\s*(\S+):\s+([a-f0-9]+)/);
+                if (match) {
+                  pushedCommitIds.add(match[2].substring(0, 12));
+                }
+              });
+            }
+            
+            if (logOutput && logOutput.trim()) {
+              const lines = logOutput.split('\n').filter(l => l.trim());
+              if (lines.length > 0) {
+                lines.forEach(line => {
+                  // Parse JJ log format
+                  // Example: @  vqvsryko nui@agentmux.ai 2026-03-11 12:53:40 fix-jj-symlink* ae0c5d4f
+                  //          │  description
+                  const symbolMatch = line.match(/^([○●@◆])	/);
+                  const commitMatch = line.match(/([a-f0-9]{12})/);
+                  const descMatch = line.match(/│	(.*)$/);
+                  
+                  if (symbolMatch && descMatch) {
+                    const commitId = commitMatch ? commitMatch[1] : '';
+                    const isPushed = pushedCommitIds.has(commitId);
+                    const symbol = isPushed ? '●' : '○';
+                    const description = descMatch[1].trim();
+                    const agentColor = description.includes('@nui') ? chalk.cyan :
+                                      description.includes('@sam') ? chalk.green :
+                                      description.includes('@wit') ? chalk.magenta : chalk.white;
+                    
+                    console.log(`  ${symbol} ${agentColor(description)}`);
+                  } else if (line.includes('@') || line.includes('○') || line.includes('●')) {
+                    // Handle commit line with symbol
+                    const commitMatch = line.match(/([a-f0-9]{12})/);
+                    const commitId = commitMatch ? commitMatch[1] : '';
+                    const isPushed = pushedCommitIds.has(commitId);
+                    const symbol = isPushed ? '●' : '○';
+                    
+                    // Extract author tag
+                    const authorMatch = line.match(/@(\w+)/);
+                    const author = authorMatch ? authorMatch[1] : 'unknown';
+                    
+                    // Extract description if available
+                    let displayLine = line;
+                    const descMatch = line.match(/│	(.*)$/);
+                    if (descMatch) {
+                      displayLine = descMatch[1].trim();
+                    }
+                    
+                    const agentColor = author === 'nui' ? chalk.cyan :
+                                      author === 'sam' ? chalk.green :
+                                      author === 'wit' ? chalk.magenta : chalk.white;
+                    
+                    console.log(`  ${symbol} ${agentColor(displayLine)}`);
+                  }
+                });
+              } else {
+                console.log(chalk.gray('  No commits yet'));
+              }
             } else {
-              console.log(chalk.gray('  No changes yet'));
+              console.log(chalk.gray('  No commits yet'));
             }
           } catch {
             console.log(chalk.gray('  JJ repo initializing...'));
