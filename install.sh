@@ -43,43 +43,34 @@ else
     echo "  → Installing jj..."
     if [[ "$PKG_MANAGER" == "brew" ]]; then
         brew install jj
-    elif [[ "$PKG_MANAGER" == "apt" ]]; then
-        # jj is in Debian/Ubuntu repos as jujutsu
-        sudo apt-get update && sudo apt-get install -y jujutsu || {
-            echo "    Package manager install failed, trying cargo..."
-            if ! check_installed cargo; then
-                echo "    Installing Rust first..."
-                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                source "$HOME/.cargo/env"
-            fi
-            cargo install jj-cli
-        }
-    elif [[ "$PKG_MANAGER" == "dnf" ]]; then
-        sudo dnf install -y jj || {
-            echo "    Package manager install failed, trying cargo..."
-            if ! check_installed cargo; then
-                echo "    Installing Rust first..."
-                curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                source "$HOME/.cargo/env"
-            fi
-            cargo install jj-cli
-        }
-    elif [[ "$PKG_MANAGER" == "yum" ]]; then
-        # yum usually doesn't have jj, use cargo
-        if ! check_installed cargo; then
-            echo "    Installing Rust first..."
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            source "$HOME/.cargo/env"
-        fi
-        cargo install jj-cli
     else
-        # No package manager - try cargo directly
-        if ! check_installed cargo; then
-            echo "    Installing Rust first..."
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            source "$HOME/.cargo/env"
-        fi
-        cargo install jj-cli
+        # Download pre-compiled binary from GitHub releases
+        echo "    Downloading pre-compiled binary..."
+        JJ_VERSION="0.27.0"
+        JJ_ARCH="$(uname -m)"
+        
+        # Map architecture names
+        case "$JJ_ARCH" in
+            x86_64)
+                JJ_ARCH="x86_64-unknown-linux-gnu"
+                ;;
+            aarch64|arm64)
+                JJ_ARCH="aarch64-unknown-linux-gnu"
+                ;;
+            *)
+                echo "❌ Unsupported architecture: $JJ_ARCH"
+                echo "   Please install jj manually: https://github.com/martinvonz/jj"
+                exit 1
+                ;;
+        esac
+        
+        JJ_URL="https://github.com/martinvonz/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${JJ_ARCH}.tar.gz"
+        
+        # Download and extract
+        curl -fsSL "$JJ_URL" | tar -xz -C /tmp
+        sudo mv "/tmp/jj" /usr/local/bin/jj
+        sudo chmod +x /usr/local/bin/jj
+        echo "    ✓ jj installed to /usr/local/bin/jj"
     fi
 fi
 
