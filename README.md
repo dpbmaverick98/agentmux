@@ -1,4 +1,4 @@
-# AgentMux v3
+# AgentMux 
 
 Ultra-lean multi-agent terminal multiplexer using tmux and JJ version control.
 
