@@ -1,128 +1,128 @@
 #!/bin/bash
-
 set -e
 
-echo "🌊 Installing AgentMux..."
+# AgentMux One-Liner Installer for macOS
+# Usage: curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/agentmux/main/install.sh | bash
+
+echo "🔧 AgentMux Installer"
+echo "====================="
 echo ""
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# Check for Rust
-if ! command -v rustc &> /dev/null; then
-    echo -e "${RED}❌ Rust not found${NC}"
-    echo "Please install Rust first:"
-    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+# Check for macOS
+if [[ "$OSTYPE" != "darwin"* ]]; then
+    echo "❌ This installer currently only supports macOS"
     exit 1
 fi
 
-echo -e "${GREEN}✅ Rust $(rustc --version)${NC}"
-
-# Create AgentMux directory
-AGENTMUX_DIR="$HOME/.agentmux"
-mkdir -p "$AGENTMUX_DIR"/{shared,skills}
-
-# Clone from GitHub
-INSTALL_DIR="$AGENTMUX_DIR/app"
-if [ -d "$INSTALL_DIR" ]; then
-    echo "Updating AgentMux from GitHub..."
-    cd "$INSTALL_DIR"
-    git pull origin master
-else
-    echo "Cloning AgentMux from GitHub..."
-    git clone https://github.com/dpbmaverick98/agentmux.git "$INSTALL_DIR"
+# Check for Homebrew
+if ! command -v brew &> /dev/null; then
+    echo "❌ Homebrew not found. Please install it first:"
+    echo "   /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+    exit 1
 fi
 
-cd "$INSTALL_DIR"
+echo "Checking dependencies..."
 
-# Build release binary
-echo "Building AgentMux (this may take a few minutes)..."
-cargo build --release
-
-# Create symlink
-BIN_DIR="$HOME/.local/bin"
-mkdir -p "$BIN_DIR"
-ln -sf "$INSTALL_DIR/target/release/agentmux" "$BIN_DIR/agentmux"
-
-# Add to PATH if needed
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    echo ""
-    echo -e "${YELLOW}⚠️  Please add $BIN_DIR to your PATH:${NC}"
-    echo "  export PATH=\"$BIN_DIR:\$PATH\""
-    echo ""
-    echo "Add this to your ~/.bashrc or ~/.zshrc:"
-    echo "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.bashrc"
-fi
-
-echo -e "${GREEN}✅ AgentMux built!${NC}"
-echo ""
-
-# Check for OpenCode
-if ! command -v opencode &> /dev/null; then
-    echo -e "${YELLOW}📦 OpenCode not found. Installing...${NC}"
-    curl -fsSL https://opencode.ai/install | bash
-else
-    echo -e "${GREEN}✅ OpenCode installed${NC}"
-fi
-
-# Check for Claude Code
-if ! command -v claude &> /dev/null; then
-    echo -e "${YELLOW}📦 Claude Code not found. Installing...${NC}"
-    npm install -g @anthropic-ai/claude-code
-else
-    echo -e "${GREEN}✅ Claude Code installed${NC}"
-fi
-
-echo ""
-echo "🔑 Configure your AI providers:"
-echo ""
-
-read -p "Kimi API Key (optional, press Enter to skip): " KIMI_KEY
-echo ""
-read -p "MiniMax API Key (optional, press Enter to skip): " MINIMAX_KEY
-echo ""
-
-mkdir -p "$HOME/.config/opencode/providers"
-
-if [ -n "$KIMI_KEY" ]; then
-    cat > "$HOME/.config/opencode/providers/kimi.json" <<EOF
-{
-  "name": "kimi",
-  "base_url": "https://api.kimi.com/v1",
-  "api_key": "$KIMI_KEY",
-  "model": "kimi-k2.5"
+# Function to check if a command exists
+check_installed() {
+    command -v "$1" &> /dev/null
 }
-EOF
-    echo -e "${GREEN}✅ Kimi configured${NC}"
+
+# Install jj (via Homebrew)
+if check_installed jj; then
+    echo "  ✓ jj already installed"
+else
+    echo "  → Installing jj..."
+    brew install jj
 fi
 
-if [ -n "$MINIMAX_KEY" ]; then
-    cat > "$HOME/.config/opencode/providers/minimax.json" <<EOF
-{
-  "name": "minimax",
-  "base_url": "https://api.minimax.io/anthropic",
-  "api_key": "$MINIMAX_KEY",
-  "model": "MiniMax-M2.5"
-}
-EOF
-    echo -e "${GREEN}✅ MiniMax configured${NC}"
+# Install tmux (via Homebrew)
+if check_installed tmux; then
+    echo "  ✓ tmux already installed"
+else
+    echo "  → Installing tmux..."
+    brew install tmux
 fi
 
-if ! claude auth status &> /dev/null; then
+# Install bun (via official installer)
+if check_installed bun; then
+    echo "  ✓ bun already installed"
+else
+    echo "  → Installing bun..."
+    curl -fsSL https://bun.sh/install | bash
+    # Source bun for this session
+    export PATH="$HOME/.bun/bin:$PATH"
+fi
+
+# Install claude (via npm)
+if check_installed claude; then
+    echo "  ✓ claude already installed"
+else
+    echo "  → Installing claude..."
+    npm install -g @anthropic-ai/claude-cli
+fi
+
+# Install opencode (via npm)
+if check_installed opencode; then
+    echo "  ✓ opencode already installed"
+else
+    echo "  → Installing opencode..."
+    npm install -g opencode
+fi
+
+echo ""
+echo "📦 Installing AgentMux..."
+
+# Check if we're already in the agentmux repo
+if [[ -f "$(pwd)/package.json" ]] && grep -q "agentmux" "$(pwd)/package.json" 2>/dev/null; then
+    echo "  → Building from current directory..."
+    AGENTMUX_DIR="$(pwd)"
+else
+    # Clone agentmux repo
+    AGENTMUX_DIR="$HOME/.agentmux-repo"
+    if [[ -d "$AGENTMUX_DIR" ]]; then
+        echo "  → Updating existing AgentMux repo..."
+        cd "$AGENTMUX_DIR"
+        git pull
+    else
+        echo "  → Cloning AgentMux repo..."
+        git clone https://github.com/dpbmaverick98/agentmux.git "$AGENTMUX_DIR"
+        cd "$AGENTMUX_DIR"
+    fi
+fi
+
+# Build agentmux
+echo "  → Building AgentMux..."
+bun install
+bun run build
+
+# Create symlink in ~/.local/bin
+mkdir -p "$HOME/.local/bin"
+ln -sf "$AGENTMUX_DIR/dist/index.js" "$HOME/.local/bin/agentmux"
+chmod +x "$HOME/.local/bin/agentmux"
+
+# Add to PATH if not already there
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
     echo ""
-    echo "🔐 Please login to Claude Code:"
-    claude auth login
+    echo "⚠️  Please add ~/.local/bin to your PATH:"
+    echo "   export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+    echo "   Add this to your ~/.zshrc or ~/.bashrc"
 fi
 
 echo ""
-echo -e "${GREEN}🌊 AgentMux installation complete!${NC}"
+echo "✅ AgentMux installed successfully!"
 echo ""
-echo "Get started:"
-echo "  agentmux init myproject"
-echo "  agentmux start"
+
+# Initialize in current directory if not already
+cd "$OLDPWD" || exit
+if [[ ! -d ".agentmux" ]]; then
+    echo "🌊 Initializing AgentMux in current directory..."
+    "$HOME/.local/bin/agentmux" init
+fi
+
+# Start AgentMux
 echo ""
-echo "Documentation: https://github.com/dpbmaverick98/agentmux"
+echo "🚀 Starting AgentMux..."
 echo ""
+"$HOME/.local/bin/agentmux" start

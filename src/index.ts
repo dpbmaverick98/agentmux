@@ -110,11 +110,12 @@ program
   });
 
 program
-  .command('init <name>')
+  .command('init')
   .description('Initialize a new AgentMux project in current directory')
-  .action((name: string) => {
+  .action(() => {
     const agentMuxDir = getAgentMuxDir();
     const currentDir = process.cwd();
+    const name = path.basename(currentDir);
 
     console.log(chalk.blue(`🌊 Initializing AgentMux project: ${name}`));
     console.log(chalk.gray(`   Location: ${currentDir}/.agentmux/\n`));
@@ -122,34 +123,25 @@ program
     // Check if already initialized
     if (fs.existsSync(agentMuxDir)) {
       console.log(chalk.yellow('⚠️  .agentmux/ already exists in this directory'));
-      console.log(chalk.gray('   Use: rm -rf .agentmux && agentmux init <name> to reinitialize\n'));
+      console.log(chalk.gray('   Use: rm -rf .agentmux && agentmux init to reinitialize\n'));
       return;
     }
 
     // Create .agentmux directory structure
     fs.mkdirSync(agentMuxDir, { recursive: true });
-    fs.mkdirSync(path.join(agentMuxDir, '.jj'), { recursive: true });
     fs.mkdirSync(path.join(agentMuxDir, 'shared'), { recursive: true });
     fs.mkdirSync(path.join(agentMuxDir, 'skills'), { recursive: true });
 
-    // Check if we're in a git repo
-    const isGitRepo = fs.existsSync(path.join(currentDir, '.git'));
-
-    // Initialize JJ
+    // Initialize JJ in .agentmux/.jj/
     if (checkJJ()) {
       try {
-        if (isGitRepo) {
-          execSync('jj git init', { cwd: currentDir });
-          console.log(chalk.green('  ✓ JJ initialized (backed by existing git repo)'));
-        } else {
-          execSync('jj init', { cwd: currentDir });
-          console.log(chalk.green('  ✓ JJ initialized'));
-        }
+        execSync('jj git init', { cwd: agentMuxDir });
+        console.log(chalk.green('  ✓ JJ initialized in .agentmux/.jj/'));
       } catch (e) {
         console.log(chalk.yellow('  ⚠️  Failed to initialize JJ'));
       }
     } else {
-      console.log(chalk.yellow('\n⚠️  JJ not installed. Install with: cargo install jj-cli'));
+      console.log(chalk.yellow('\n⚠️  JJ not installed. Install with: brew install jj'));
     }
 
     // Create config.toml
@@ -223,7 +215,7 @@ program
     const agentMuxDir = getAgentMuxDir();
     if (!fs.existsSync(agentMuxDir)) {
       console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
-      console.log(chalk.white('Run: agentmux init <project-name>\n'));
+      console.log(chalk.white('Run: agentmux init\n'));
       return;
     }
 
@@ -329,7 +321,7 @@ program
 
     if (!fs.existsSync(agentMuxDir)) {
       console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
-      console.log(chalk.white('Run: agentmux init <project-name>\n'));
+      console.log(chalk.white('Run: agentmux init\n'));
       return;
     }
 
@@ -491,6 +483,86 @@ program
     console.log(chalk.blue('\n⚙️  AgentMux Configuration\n'));
     const config = fs.readFileSync(configPath, 'utf-8');
     console.log(config);
+  });
+
+program
+  .command('install-deps')
+  .description('Install all required dependencies (claude, opencode, jj, tmux, bun)')
+  .action(() => {
+    console.log(chalk.blue('🔧 Installing AgentMux dependencies...\n'));
+
+    const platform = process.platform;
+    if (platform !== 'darwin') {
+      console.log(chalk.yellow('⚠️  This installer currently only supports macOS'));
+      console.log(chalk.gray('   Please install manually:'));
+      console.log(chalk.white('   - claude: npm install -g @anthropic-ai/claude-cli'));
+      console.log(chalk.white('   - opencode: npm install -g opencode'));
+      console.log(chalk.white('   - jj: brew install jj'));
+      console.log(chalk.white('   - tmux: brew install tmux'));
+      console.log(chalk.white('   - bun: curl -fsSL https://bun.sh/install | bash'));
+      return;
+    }
+
+    let installed = [];
+    let skipped = [];
+
+    // Check/install claude
+    try {
+      execSync('which claude');
+      skipped.push('claude');
+    } catch {
+      console.log(chalk.gray('Installing claude...'));
+      execSync('npm install -g @anthropic-ai/claude-cli', { stdio: 'inherit' });
+      installed.push('claude');
+    }
+
+    // Check/install opencode
+    try {
+      execSync('which opencode');
+      skipped.push('opencode');
+    } catch {
+      console.log(chalk.gray('Installing opencode...'));
+      execSync('npm install -g opencode', { stdio: 'inherit' });
+      installed.push('opencode');
+    }
+
+    // Check/install jj
+    try {
+      execSync('which jj');
+      skipped.push('jj');
+    } catch {
+      console.log(chalk.gray('Installing jj...'));
+      execSync('brew install jj', { stdio: 'inherit' });
+      installed.push('jj');
+    }
+
+    // Check/install tmux
+    try {
+      execSync('which tmux');
+      skipped.push('tmux');
+    } catch {
+      console.log(chalk.gray('Installing tmux...'));
+      execSync('brew install tmux', { stdio: 'inherit' });
+      installed.push('tmux');
+    }
+
+    // Check/install bun
+    try {
+      execSync('which bun');
+      skipped.push('bun');
+    } catch {
+      console.log(chalk.gray('Installing bun...'));
+      execSync('curl -fsSL https://bun.sh/install | bash', { stdio: 'inherit' });
+      installed.push('bun');
+    }
+
+    console.log(chalk.green('\n✅ Dependency check complete!'));
+    if (installed.length > 0) {
+      console.log(chalk.green(`   Installed: ${installed.join(', ')}`));
+    }
+    if (skipped.length > 0) {
+      console.log(chalk.gray(`   Already present: ${skipped.join(', ')}`));
+    }
   });
 
 // Helper to generate skill content

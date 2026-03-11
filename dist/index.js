@@ -2452,38 +2452,32 @@ You can now run:`));
     console.log(source_default.white("   tmux: brew install tmux (macOS) or apt-get install tmux (Linux)"));
   }
 });
-program2.command("init <name>").description("Initialize a new AgentMux project in current directory").action((name) => {
+program2.command("init").description("Initialize a new AgentMux project in current directory").action(() => {
   const agentMuxDir = getAgentMuxDir();
   const currentDir = process.cwd();
+  const name = path.basename(currentDir);
   console.log(source_default.blue(`\uD83C\uDF0A Initializing AgentMux project: ${name}`));
   console.log(source_default.gray(`   Location: ${currentDir}/.agentmux/
 `));
   if (fs.existsSync(agentMuxDir)) {
     console.log(source_default.yellow("\u26A0\uFE0F  .agentmux/ already exists in this directory"));
-    console.log(source_default.gray(`   Use: rm -rf .agentmux && agentmux init <name> to reinitialize
+    console.log(source_default.gray(`   Use: rm -rf .agentmux && agentmux init to reinitialize
 `));
     return;
   }
   fs.mkdirSync(agentMuxDir, { recursive: true });
-  fs.mkdirSync(path.join(agentMuxDir, ".jj"), { recursive: true });
   fs.mkdirSync(path.join(agentMuxDir, "shared"), { recursive: true });
   fs.mkdirSync(path.join(agentMuxDir, "skills"), { recursive: true });
-  const isGitRepo = fs.existsSync(path.join(currentDir, ".git"));
   if (checkJJ()) {
     try {
-      if (isGitRepo) {
-        execSync("jj git init", { cwd: currentDir });
-        console.log(source_default.green("  \u2713 JJ initialized (backed by existing git repo)"));
-      } else {
-        execSync("jj init", { cwd: currentDir });
-        console.log(source_default.green("  \u2713 JJ initialized"));
-      }
+      execSync("jj git init", { cwd: agentMuxDir });
+      console.log(source_default.green("  \u2713 JJ initialized in .agentmux/.jj/"));
     } catch (e) {
       console.log(source_default.yellow("  \u26A0\uFE0F  Failed to initialize JJ"));
     }
   } else {
     console.log(source_default.yellow(`
-\u26A0\uFE0F  JJ not installed. Install with: cargo install jj-cli`));
+\u26A0\uFE0F  JJ not installed. Install with: brew install jj`));
   }
   const config = `# AgentMux Project Config
 [project]
@@ -2545,7 +2539,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   if (!fs.existsSync(agentMuxDir)) {
     console.log(source_default.red(`
 \u274C No .agentmux/ directory found!`));
-    console.log(source_default.white(`Run: agentmux init <project-name>
+    console.log(source_default.white(`Run: agentmux init
 `));
     return;
   }
@@ -2617,7 +2611,7 @@ program2.command("status").description("Show live status with auto-refresh (runs
   if (!fs.existsSync(agentMuxDir)) {
     console.log(source_default.red(`
 \u274C No .agentmux/ directory found!`));
-    console.log(source_default.white(`Run: agentmux init <project-name>
+    console.log(source_default.white(`Run: agentmux init
 `));
     return;
   }
@@ -2758,6 +2752,71 @@ program2.command("config").description("Show current project configuration").act
 `));
   const config = fs.readFileSync(configPath, "utf-8");
   console.log(config);
+});
+program2.command("install-deps").description("Install all required dependencies (claude, opencode, jj, tmux, bun)").action(() => {
+  console.log(source_default.blue(`\uD83D\uDD27 Installing AgentMux dependencies...
+`));
+  const platform = process.platform;
+  if (platform !== "darwin") {
+    console.log(source_default.yellow("\u26A0\uFE0F  This installer currently only supports macOS"));
+    console.log(source_default.gray("   Please install manually:"));
+    console.log(source_default.white("   - claude: npm install -g @anthropic-ai/claude-cli"));
+    console.log(source_default.white("   - opencode: npm install -g opencode"));
+    console.log(source_default.white("   - jj: brew install jj"));
+    console.log(source_default.white("   - tmux: brew install tmux"));
+    console.log(source_default.white("   - bun: curl -fsSL https://bun.sh/install | bash"));
+    return;
+  }
+  let installed = [];
+  let skipped = [];
+  try {
+    execSync("which claude");
+    skipped.push("claude");
+  } catch {
+    console.log(source_default.gray("Installing claude..."));
+    execSync("npm install -g @anthropic-ai/claude-cli", { stdio: "inherit" });
+    installed.push("claude");
+  }
+  try {
+    execSync("which opencode");
+    skipped.push("opencode");
+  } catch {
+    console.log(source_default.gray("Installing opencode..."));
+    execSync("npm install -g opencode", { stdio: "inherit" });
+    installed.push("opencode");
+  }
+  try {
+    execSync("which jj");
+    skipped.push("jj");
+  } catch {
+    console.log(source_default.gray("Installing jj..."));
+    execSync("brew install jj", { stdio: "inherit" });
+    installed.push("jj");
+  }
+  try {
+    execSync("which tmux");
+    skipped.push("tmux");
+  } catch {
+    console.log(source_default.gray("Installing tmux..."));
+    execSync("brew install tmux", { stdio: "inherit" });
+    installed.push("tmux");
+  }
+  try {
+    execSync("which bun");
+    skipped.push("bun");
+  } catch {
+    console.log(source_default.gray("Installing bun..."));
+    execSync("curl -fsSL https://bun.sh/install | bash", { stdio: "inherit" });
+    installed.push("bun");
+  }
+  console.log(source_default.green(`
+\u2705 Dependency check complete!`));
+  if (installed.length > 0) {
+    console.log(source_default.green(`   Installed: ${installed.join(", ")}`));
+  }
+  if (skipped.length > 0) {
+    console.log(source_default.gray(`   Already present: ${skipped.join(", ")}`));
+  }
 });
 function generateSkill(projectName) {
   return `# AgentMux Skill for ${projectName}
