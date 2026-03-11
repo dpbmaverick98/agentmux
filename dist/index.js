@@ -2823,10 +2823,75 @@ program2.command("install-deps").description("Install all required dependencies 
     console.log(source_default.gray(`   Already present: ${skipped.join(", ")}`));
   }
 });
+program2.command("list").description("List all agents with their status and harness").action(() => {
+  console.log(source_default.blue(`
+\uD83D\uDCCB AgentMux Agents
+`));
+  const session = getSessionName();
+  const agents = [
+    { pane: 0, name: "status", harness: "monitor", desc: "Status Monitor" },
+    { pane: 1, name: "nui", harness: "opencode", desc: "Agent Nui" },
+    { pane: 2, name: "sam", harness: "opencode", desc: "Agent Sam" },
+    { pane: 3, name: "wit", harness: "claude", desc: "Agent Wit" }
+  ];
+  try {
+    const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
+    const paneCommands = {};
+    if (output) {
+      output.trim().split(`
+`).forEach((line) => {
+        const [paneNum, ...cmdParts] = line.split(":");
+        paneCommands[paneNum.trim()] = cmdParts.join(":").trim();
+      });
+    }
+    agents.forEach((agent) => {
+      const cmd = paneCommands[agent.pane.toString()] || "not running";
+      const status = cmd !== "not running" ? source_default.green("\u25CF running") : source_default.gray("\u25CB offline");
+      console.log(`${source_default.yellow(`Pane ${agent.pane}:`)} ${source_default.bold(agent.name)} (${agent.harness})`);
+      console.log(`         ${source_default.gray(agent.desc)}`);
+      console.log(`         Status: ${status}`);
+      console.log(`         Command: ${source_default.gray(cmd)}`);
+      console.log(`         Send message: ${source_default.cyan(`agentmux send ${agent.name} "hello"`)}`);
+      console.log();
+    });
+    console.log(source_default.gray("Quick commands:"));
+    console.log(`  ${source_default.cyan('agentmux send nui "message"')}  - Send to nui`);
+    console.log(`  ${source_default.cyan('agentmux send sam "message"')}  - Send to sam`);
+    console.log(`  ${source_default.cyan('agentmux send wit "message"')}  - Send to wit`);
+    console.log(`  ${source_default.cyan("agentmux status")}             - View live status`);
+    console.log();
+  } catch (e) {
+    console.log(source_default.red(`\u274C No active AgentMux session. Run: agentmux start
+`));
+  }
+});
+program2.command("stop").description("Stop the AgentMux tmux session").action(() => {
+  const session = getSessionName();
+  try {
+    execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+    console.log(source_default.green(`
+\u2705 AgentMux session stopped
+`));
+  } catch {
+    console.log(source_default.yellow(`
+\u26A0\uFE0F  No active AgentMux session found
+`));
+  }
+});
 function generateSkill(projectName) {
   return `# AgentMux Skill for ${projectName}
 
 You're working in an AgentMux multi-agent environment with JJ version control.
+
+## Your Fellow Agents
+
+This project has 3 AI agents working together:
+
+- **nui** (opencode) - Top-right pane
+- **sam** (opencode) - Bottom-left pane  
+- **wit** (claude) - Bottom-right pane
+
+You are: **$AGENTMUX_AGENT** running on **${process.env.AGENTMUX_AGENT === "wit" ? "claude" : "opencode"}**
 
 ## Quick Commands
 
@@ -2836,50 +2901,97 @@ Look at the top-left pane or run:
 agentmux status
 \`\`\`
 
+### List All Agents
+\`\`\`bash
+agentmux list
+\`\`\`
+
 ### Message Another Agent
 \`\`\`bash
 agentmux send <agent-name> "Your message"
-# Example: agentmux send minimax "Check my auth.py"
+# Examples:
+agentmux send nui "Can you review the API design?"
+agentmux send sam "Please implement the auth module"
+agentmux send wit "Ready for code review"
 \`\`\`
 
-### JJ Workflow
+## Cross-Agent Communication Examples
 
-Create a change for your work:
+### Example 1: Requesting Help
+You: \`agentmux send sam "I need help with the database schema. Can you check my changes?"\`
+Sam sees: \uD83D\uDCE8 [@nui \u2192 @sam]: I need help with the database schema. Can you check my changes?
+
+### Example 2: Sharing Progress
+You: \`agentmux send wit "Auth module is complete. Ready for review."\`
+Wit sees: \uD83D\uDCE8 [@sam \u2192 @wit]: Auth module is complete. Ready for review.
+
+### Example 3: Broadcasting
+You: \`agentmux send nui "Team sync in 5 minutes"\`
+Nui sees: \uD83D\uDCE8 [@wit \u2192 @nui]: Team sync in 5 minutes
+
+## JJ Workflow
+
+### Create a change for your work:
 \`\`\`bash
-jj new -m "@$AGENTMUX_AGENT what you're doing"
-\`\`
+jj new -m "@$AGENTMUX_AGENT: what you're doing"
+# Example: jj new -m "@nui: Designed user API endpoints"
+\`\`\`
 
-See your changes:
+### See your changes:
 \`\`\`bash
-jj diff
-jj log
-\`\`
+jj diff          # Show current changes
+jj log           # Show commit history
+jj status        # Show repository status
+\`\`\`
 
-Update your progress:
+### Update your progress:
 \`\`\`bash
-jj describe -m "@$AGENTMUX_AGENT updated: what changed"
-\`\`
+jj describe -m "@$AGENTMUX_AGENT: updated - what changed"
+# Example: jj describe -m "@sam: Fixed auth bug in login flow"
+\`\`\`
 
-## Multi-Agent Collaboration
+### See what other agents are working on:
+\`\`\`bash
+jj log --template "author ++ ": " ++ description"
+\`\`\`
 
-1. Work on your assigned task
-2. Commit with descriptive message using jj
-3. Message other agents when you need something:
-   \`agentmux send <agent> "Please review X"\`
-4. Check other agents' work via jj log
+## Multi-Agent Collaboration Workflow
+
+1. **Start your task** - Check \`agentmux list\` to see who's online
+2. **Work on your code** - Edit files, test changes
+3. **Commit regularly** - Use descriptive messages with @agent tag
+4. **Communicate** - Message other agents when you:
+   - Need help or clarification
+   - Complete a task
+   - Want a review
+   - Found an issue
+5. **Check JJ log** - See what other agents committed
 
 ## Project Structure
 
-- JJ Repo: .agentmux/.jj/
-- Shared Context: .agentmux/shared/
-- Config: .agentmux/config.toml
-- This Skill: .agentmux/skills/agentmux.md
+\`\`\`
+.agentmux/
+\u251C\u2500\u2500 .jj/              # JJ version control
+\u251C\u2500\u2500 config.toml       # Project configuration
+\u251C\u2500\u2500 skills/           # Agent skills (this file)
+\u2514\u2500\u2500 shared/           # Shared context
+    \u251C\u2500\u2500 plan.md       # Project plan
+    \u2514\u2500\u2500 messages.txt  # Message log
+\`\`\`
+
+## Environment Variables Available
+
+- \`AGENTMUX_AGENT\` - Your agent name (nui/sam/wit)
+- \`AGENTMUX_PROJECT\` - Project directory path
 
 ## Tips
 
-- Use descriptive commit messages: "@kimi implemented auth API"
-- Check the status pane (top-left) for live updates
+- Use descriptive commit messages: "@nui implemented auth API"
+- Check the status pane (top-left) for live JJ updates
 - Click between panes with mouse or use Ctrl+B + arrow keys
+- Press Ctrl+B then Z to zoom a pane, Z again to unzoom
+- Your messages appear in other agents' terminals immediately
+- Use \`agentmux stop\` to kill the session when done
 `;
 }
 program2.parse();
