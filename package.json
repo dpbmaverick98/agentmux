@@ -1,0 +1,23 @@
+{
+  "name": "agentmux",
+  "version": "3.0.0",
+  "description": "Ultra-lean multi-agent terminal multiplexer using tmux",
+  "type": "module",
+  "bin": {
+    "agentmux": "./dist/index.js",
+    "am": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "dev": "bun run ./src/index.ts",
+    "start": "./dist/index.js"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "bun-types": "latest"
+  }
+}
