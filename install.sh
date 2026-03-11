@@ -119,7 +119,7 @@ if check_installed opencode; then
     echo "  ✓ opencode already installed"
 else
     echo "  → Installing opencode..."
-    npm install -g opencode
+    bun add -g opencode-ai
 fi
 
 echo ""
