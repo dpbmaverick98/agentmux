@@ -177,4 +177,24 @@ fi
 echo ""
 echo "🚀 Starting AgentMux..."
 echo ""
-"$HOME/.local/bin/agentmux" start
+
+# Check if we're in an interactive terminal
+if [ -t 0 ] && [ -t 1 ]; then
+    # Interactive terminal - attach normally
+    "$HOME/.local/bin/agentmux" start
+else
+    # Non-interactive (piped from curl, container, etc.)
+    # Don't auto-start, just print instructions
+    echo "Non-interactive mode detected."
+    echo ""
+    echo "✅ AgentMux is installed and ready!"
+    echo ""
+    echo "To start the 4-pane environment, run:"
+    echo "  agentmux start"
+    echo ""
+    echo "This will create a tmux session with 4 panes:"
+    echo "  - Status (top-left)"
+    echo "  - Kimi (top-right)"
+    echo "  - Minimax (bottom-left)"
+    echo "  - Claude (bottom-right)"
+fi
