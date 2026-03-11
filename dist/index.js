@@ -2681,7 +2681,16 @@ Recent Messages:`));
 `).filter((l) => l.trim() && !l.startsWith("#"));
         if (lines.length > 0) {
           lines.slice(-5).forEach((line) => {
-            console.log(`  ${line}`);
+            const match = line.match(/^\[(.*?)\] (.*)$/);
+            if (match) {
+              const timestamp = new Date(match[1]);
+              const msg = match[2];
+              const ago = Math.floor((Date.now() - timestamp.getTime()) / 1000);
+              const timeStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago / 60)}m ago` : `${Math.floor(ago / 3600)}h ago`;
+              console.log(`  ${source_default.gray(`[${timeStr}]`)} ${msg}`);
+            } else {
+              console.log(`  ${line}`);
+            }
           });
         } else {
           console.log(source_default.gray("  No messages yet"));
@@ -2721,8 +2730,9 @@ program2.command("send <to> <message...>").description("Send a message to anothe
   const session = getSessionName();
   const msg = message.join(" ");
   const from = process.env.AGENTMUX_AGENT || "user";
-  const escapedMsg = msg.replace(/"/g, "\\\"").replace(/'/g, "\\'");
-  const fullMsg = `echo "\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${escapedMsg}"`;
+  const agentMuxDir = getAgentMuxDir();
+  const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}`;
+  const timestamp = new Date().toISOString();
   try {
     const paneMap = {
       status: 0,
@@ -2732,8 +2742,13 @@ program2.command("send <to> <message...>").description("Send a message to anothe
     };
     const paneNum = paneMap[to.toLowerCase()];
     if (paneNum !== undefined) {
-      execSync(`tmux send-keys -t ${session}:0.${paneNum} "${fullMsg}" C-m`);
+      execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, "\\\"")}
+"' C-m`);
       console.log(source_default.green(`\u2705 Message sent to ${to}`));
+      const messagesPath = path.join(agentMuxDir, "shared", "messages.txt");
+      const logEntry = `[${timestamp}] ${displayMsg}
+`;
+      fs.appendFileSync(messagesPath, logEntry);
     } else {
       console.log(source_default.red(`\u274C Unknown agent: ${to}. Try: status, nui, sam, wit`));
     }

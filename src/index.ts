@@ -394,7 +394,19 @@ program
           const lines = messages.split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
           if (lines.length > 0) {
             lines.slice(-5).forEach((line: string) => {
-              console.log(`  ${line}`);
+              // Parse timestamp from format: [2026-03-11T10:30:00.000Z] message
+              const match = line.match(/^\[(.*?)\] (.*)$/);
+              if (match) {
+                const timestamp = new Date(match[1]);
+                const msg = match[2];
+                const ago = Math.floor((Date.now() - timestamp.getTime()) / 1000);
+                const timeStr = ago < 60 ? `${ago}s ago` : 
+                               ago < 3600 ? `${Math.floor(ago/60)}m ago` : 
+                               `${Math.floor(ago/3600)}h ago`;
+                console.log(`  ${chalk.gray(`[${timeStr}]`)} ${msg}`);
+              } else {
+                console.log(`  ${line}`);
+              }
             });
           } else {
             console.log(chalk.gray('  No messages yet'));
@@ -444,10 +456,11 @@ program
     const session = getSessionName();
     const msg = message.join(' ');
     const from = process.env.AGENTMUX_AGENT || 'user';
+    const agentMuxDir = getAgentMuxDir();
 
-    // Escape quotes in message to prevent breaking tmux command
-    const escapedMsg = msg.replace(/"/g, '\\"').replace(/'/g, "\\'");
-    const fullMsg = `echo "📨 [@${from} → @${to}]: ${escapedMsg}"`;
+    // Create the display message
+    const displayMsg = `📨 [@${from} → @${to}]: ${msg}`;
+    const timestamp = new Date().toISOString();
 
     try {
       // Map agent names to pane numbers
@@ -460,8 +473,15 @@ program
       const paneNum = paneMap[to.toLowerCase()];
 
       if (paneNum !== undefined) {
-        execSync(`tmux send-keys -t ${session}:0.${paneNum} "${fullMsg}" C-m`);
+        // Send message using printf to avoid echo interpretation issues
+        // Use single quotes around the message to preserve spaces
+        execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, '\\"')}\n"' C-m`);
         console.log(chalk.green(`✅ Message sent to ${to}`));
+        
+        // Log message to messages.txt with timestamp
+        const messagesPath = path.join(agentMuxDir, 'shared', 'messages.txt');
+        const logEntry = `[${timestamp}] ${displayMsg}\n`;
+        fs.appendFileSync(messagesPath, logEntry);
       } else {
         console.log(chalk.red(`❌ Unknown agent: ${to}. Try: status, nui, sam, wit`));
       }
