@@ -63,6 +63,28 @@ agentmux start
 | `agentmux send sam "message"` | Send message to sam |
 | `agentmux send wit "message"` | Send message to wit |
 
+### Agent Management Commands
+
+| Command | Description |
+|---------|-------------|
+| `agentmux spawn opencode <name>` | Spawn new agent with opencode (max 11 total) |
+| `agentmux spawn claude <name>` | Spawn new agent with claude |
+| `agentmux kill <agent-name>` | Kill a specific agent |
+| `agentmux stop` | Kill entire tmux session |
+
+**Spawn Examples:**
+```bash
+agentmux spawn opencode max     # Create "max" agent with opencode
+agentmux spawn claude alex      # Create "alex" agent with claude
+```
+
+**Kill Examples:**
+```bash
+agentmux kill max       # Kill the "max" agent
+agentmux kill nui       # Kill nui (can respawn later)
+agentmux stop           # Kill everything
+```
+
 **Example:**
 ```bash
 # From any agent terminal:
@@ -128,25 +150,36 @@ Messages appear directly in the agent's terminal:
 ```
 project/
 ├── .agentmux/
-│   ├── .jj/              # JJ version control
-│   ├── config.toml       # Project config
+│   ├── .jj/                 # JJ version control
+│   ├── config.toml          # Project config
 │   ├── skills/
-│   │   └── agentmux.md   # Agent instructions
+│   │   ├── agentmux.md      # AgentMux commands
+│   │   └── jj-workflow.md   # JJ workflow guide
 │   └── shared/
-│       ├── plan.md       # Project plan
-│       └── messages.txt  # Message log
+│       ├── plan.md          # Project plan
+│       └── messages.txt     # Message log
 └── [your project files]
 ```
 
-## Agent Skill
+## Agent Skills
 
-Each agent automatically receives a skill file at `.agentmux/skills/agentmux.md` that teaches them:
+Each agent automatically receives two skill files in `.agentmux/skills/`:
 
-- Available commands (`agentmux list`, `agentmux send`, etc.)
-- JJ workflow (`jj new`, `jj log`, `jj describe`)
+### `agentmux.md`
+AgentMux-specific commands and workflows:
+- Available commands (`agentmux list`, `agentmux send`, `agentmux spawn`, etc.)
 - How to message other agents
-- Environment variables available
-- Tips for collaboration
+- Spawning and killing agents
+- Environment variables
+- Keyboard shortcuts
+
+### `jj-workflow.md`
+Complete JJ version control guide:
+- Creating and updating changes
+- Viewing commit history
+- Agent tagging conventions
+- JJ vs Git differences
+- Advanced commands
 
 ## Keyboard Shortcuts
 

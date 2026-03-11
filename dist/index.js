@@ -2495,8 +2495,10 @@ auto_refresh_interval = 3
 show_idle_indicator = true
 `;
   fs.writeFileSync(path.join(agentMuxDir, "config.toml"), config);
-  const skillContent = generateSkill(name);
-  fs.writeFileSync(path.join(agentMuxDir, "skills", "agentmux.md"), skillContent);
+  const agentmuxSkillContent = generateAgentmuxSkill(name);
+  const jjSkillContent = generateJJSkill(name);
+  fs.writeFileSync(path.join(agentMuxDir, "skills", "agentmux.md"), agentmuxSkillContent);
+  fs.writeFileSync(path.join(agentMuxDir, "skills", "jj-workflow.md"), jjSkillContent);
   fs.writeFileSync(path.join(agentMuxDir, "shared", "plan.md"), `# Plan for ${name}
 
 Add your multi-agent plan here.
@@ -3002,144 +3004,177 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
 `));
   }
 });
-function generateSkill(projectName) {
-  return `# AgentMux Skill for ${projectName}
+function generateAgentmuxSkill(projectName) {
+  return `# AgentMux Commands for ${projectName}
 
-You're working in an AgentMux multi-agent environment with JJ version control.
+You're working in an AgentMux multi-agent terminal environment.
 
-## Your Fellow Agents
-
-This project has 3 AI agents working together:
-
-- **nui** (opencode) - Top-right pane
-- **sam** (opencode) - Bottom-left pane  
-- **wit** (claude) - Bottom-right pane
+## Your Identity
 
 You are: **$AGENTMUX_AGENT** running on **${process.env.AGENTMUX_AGENT === "wit" ? "claude" : "opencode"}**
 
-## Quick Commands
+## The Team
 
-### Check Status
-Look at the top-left pane or run:
-\`\`\`bash
-agentmux status
-\`\`\`
+Three agents work together in this project:
 
-### List All Agents
+| Agent | Harness | Position |
+|-------|---------|----------|
+| **nui** | opencode | Top-right pane |
+| **sam** | opencode | Bottom-left pane |
+| **wit** | claude | Bottom-right pane |
+
+Plus a status monitor in the top-left pane showing live JJ changes.
+
+## Core Commands
+
+### Check who's online
 \`\`\`bash
 agentmux list
 \`\`\`
 
-### Message Another Agent
+### Message another agent
+Messages appear directly in their terminal:
 \`\`\`bash
-agentmux send <agent-name> "Your message"
+agentmux send <agent-name> "your message"
+
 # Examples:
-agentmux send nui "Can you review the API design?"
-agentmux send sam "Please implement the auth module"
+agentmux send sam "Can you review my auth module?"
 agentmux send wit "Ready for code review"
+agentmux send nui "Need help with the database schema"
 \`\`\`
 
-## Cross-Agent Communication Examples
+**What they see:**
+\`\`\`
+\uD83D\uDCE8 [@nui \u2192 @sam]: Can you review my auth module?
+\`\`\`
 
-### Example 1: Requesting Help
-You: \`agentmux send sam "I need help with the database schema. Can you check my changes?"\`
-Sam sees: \uD83D\uDCE8 [@nui \u2192 @sam]: I need help with the database schema. Can you check my changes?
-
-### Example 2: Sharing Progress
-You: \`agentmux send wit "Auth module is complete. Ready for review."\`
-Wit sees: \uD83D\uDCE8 [@sam \u2192 @wit]: Auth module is complete. Ready for review.
-
-### Example 3: Broadcasting
-You: \`agentmux send nui "Team sync in 5 minutes"\`
-Nui sees: \uD83D\uDCE8 [@wit \u2192 @nui]: Team sync in 5 minutes
-
-## JJ Workflow
-
-### Create a change for your work:
+### Spawn new agents (max 11 total)
 \`\`\`bash
-jj new -m "@$AGENTMUX_AGENT: what you're doing"
-# Example: jj new -m "@nui: Designed user API endpoints"
-\`\`\`
-
-### See your changes:
-\`\`\`bash
-jj diff          # Show current changes
-jj log           # Show commit history
-jj status        # Show repository status
-\`\`\`
-
-### Update your progress:
-\`\`\`bash
-jj describe -m "@$AGENTMUX_AGENT: updated - what changed"
-# Example: jj describe -m "@sam: Fixed auth bug in login flow"
-\`\`\`
-
-### See what other agents are working on:
-\`\`\`bash
-jj log --template "author ++ ": " ++ description"
-\`\`\`
-
-## Multi-Agent Collaboration Workflow
-
-1. **Start your task** - Check \`agentmux list\` to see who's online
-2. **Work on your code** - Edit files, test changes
-3. **Commit regularly** - Use descriptive messages with @agent tag
-4. **Communicate** - Message other agents when you:
-   - Need help or clarification
-   - Complete a task
-   - Want a review
-   - Found an issue
-5. **Check JJ log** - See what other agents committed
-
-## Project Structure
-
-\`\`\`
-.agentmux/
-\u251C\u2500\u2500 .jj/              # JJ version control
-\u251C\u2500\u2500 config.toml       # Project configuration
-\u251C\u2500\u2500 skills/           # Agent skills (this file)
-\u2514\u2500\u2500 shared/           # Shared context
-    \u251C\u2500\u2500 plan.md       # Project plan
-    \u2514\u2500\u2500 messages.txt  # Message log
-\`\`\`
-
-## Environment Variables Available
-
-- \`AGENTMUX_AGENT\` - Your agent name (nui/sam/wit)
-- \`AGENTMUX_PROJECT\` - Project directory path
-
-## Spawn and Kill Agents
-
-### Spawn a new agent (max 11 total):
-\`\`\`bash
-agentmux spawn <harness> <agent-name>
-# Examples:
 agentmux spawn opencode max    # Create "max" with opencode
 agentmux spawn claude alex     # Create "alex" with claude
 \`\`\`
 
-### Kill an agent:
+### Kill agents
 \`\`\`bash
-agentmux kill <agent-name>
-# Examples:
-agentmux kill max      # Kill the "max" agent
-agentmux kill nui      # Kill nui (can respawn later)
+agentmux kill max       # Kill specific agent
+agentmux kill nui       # Kill nui (can respawn)
+agentmux stop           # Kill everything
 \`\`\`
 
-### Kill all agents:
+### View live status
 \`\`\`bash
-agentmux stop          # Kills entire tmux session
+agentmux status
 \`\`\`
+Shows JJ changes, active agents, and recent messages.
+
+## Environment Variables
+
+- \`AGENTMUX_AGENT\` - Your name (nui/sam/wit or spawned name)
+- \`AGENTMUX_PROJECT\` - Full path to project directory
+
+## Keyboard Shortcuts (tmux)
+
+| Shortcut | Action |
+|----------|--------|
+| \`Ctrl+B \u2191\u2193\u2190\u2192\` | Move between panes |
+| \`Ctrl+B z\` | Zoom current pane |
+| \`Ctrl+B d\` | Detach (session keeps running) |
+| \`Click\` | Mouse works too |
+
+## Quick Workflow
+
+1. **Check status** - \`agentmux list\`
+2. **Work on your task** - Edit files, run tests
+3. **Message others** - \`agentmux send <agent> "message"\`
+4. **Check JJ log** - See what others committed
+5. **Spawn helpers** - \`agentmux spawn opencode helper\` if needed
+`;
+}
+function generateJJSkill(projectName) {
+  return `# JJ Workflow Guide for ${projectName}
+
+JJ (Jujutsu) is a Git-compatible version control system.
+
+## Basic Commands
+
+### Create a new change (commit)
+\`\`\`bash
+jj new -m "@$AGENTMUX_AGENT: what you did"
+
+# Examples:
+jj new -m "@nui: Designed user authentication API"
+jj new -m "@sam: Implemented login endpoint"
+jj new -m "@wit: Added password validation"
+\`\`\`
+
+### View changes
+\`\`\`bash
+jj status              # Show current state
+jj diff                # Show uncommitted changes
+jj log                 # Show commit history
+jj log --no-graph      # Simple linear log
+\`\`\`
+
+### Update an existing change
+\`\`\`bash
+jj describe -m "@$AGENTMUX_AGENT: updated - what changed"
+
+# Example:
+jj describe -m "@sam: Fixed bug in auth validation"
+\`\`\`
+
+### See what other agents committed
+\`\`\`bash
+jj log --template "author ++ ": " ++ description"
+
+# Or just:
+jj log
+\`\`\`
+
+## Agent Tagging Convention
+
+Always prefix commit messages with @agent tag:
+- \`@nui:\` - For nui's work
+- \`@sam:\` - For sam's work
+- \`@wit:\` - For wit's work
+- \`@<your-name>:\` - For spawned agents
+
+## Advanced Commands
+
+### Edit files and snapshot
+\`\`\`bash
+# Edit files normally, then:
+jj diff                    # See what changed
+jj describe -m "@$AGENTMUX_AGENT: description"  # Update commit message
+\`\`\`
+
+### Move between changes
+\`\`\`bash
+jj prev                    # Go to previous change
+jj next                    # Go to next change
+jj checkout <revision>     # Jump to specific revision
+\`\`\`
+
+### Abandon (delete) a change
+\`\`\`bash
+jj abandon <revision>
+\`\`\`
+
+## JJ vs Git
+
+JJ is Git-compatible but simpler:
+- **No staging area** - Changes are automatically tracked
+- **Mutable history** - Can edit commits after creating them
+- **Automatic snapshots** - Saves work as you edit
+- **Conflicts handled gracefully** - Multiple heads allowed
 
 ## Tips
 
-- Use descriptive commit messages: "@nui implemented auth API"
-- Check the status pane (top-left) for live JJ updates
-- Click between panes with mouse or use Ctrl+B + arrow keys
-- Press Ctrl+B then Z to zoom a pane, Z again to unzoom
-- Your messages appear in other agents' terminals immediately
-- Use \`agentmux stop\` to kill the session when done
-- You can kill and respawn agents as needed (max 11 total)
+- Commit early and often with descriptive messages
+- Use @agent tags so others know who did what
+- Check \`jj log\` regularly to see team progress
+- The status pane shows live JJ updates every 3 seconds
+- Conflicts? JJ handles them better than Git - just keep working
 `;
 }
 program2.parse();
