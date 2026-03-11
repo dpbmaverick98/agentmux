@@ -578,7 +578,7 @@ program
     console.log(chalk.blue('\n📋 AgentMux Agents\n'));
     
     const session = getSessionName();
-    const agents = [
+    const fixedAgents = [
       { pane: 0, name: 'status', harness: 'monitor', desc: 'Status Monitor' },
       { pane: 1, name: 'nui', harness: 'opencode', desc: 'Agent Nui' },
       { pane: 2, name: 'sam', harness: 'opencode', desc: 'Agent Sam' },
@@ -597,23 +597,53 @@ program
         });
       }
       
-      agents.forEach(agent => {
+      console.log(chalk.yellow('Fixed Panes:'));
+      fixedAgents.forEach(agent => {
         const cmd = paneCommands[agent.pane.toString()] || 'not running';
         const status = cmd !== 'not running' ? chalk.green('● running') : chalk.gray('○ offline');
         
-        console.log(`${chalk.yellow(`Pane ${agent.pane}:`)} ${chalk.bold(agent.name)} (${agent.harness})`);
-        console.log(`         ${chalk.gray(agent.desc)}`);
-        console.log(`         Status: ${status}`);
-        console.log(`         Command: ${chalk.gray(cmd)}`);
-        console.log(`         Send message: ${chalk.cyan(`agentmux send ${agent.name} "hello"`)}`);
-        console.log();
+        console.log(`  Pane ${agent.pane}: ${chalk.bold(agent.name)} (${agent.harness}) - ${status}`);
+        console.log(`           ${chalk.gray(cmd)}`);
       });
+      
+      // Get spawned windows
+      try {
+        const windowsOutput = exec(`tmux list-windows -t ${session} -F "#I: #W" 2>/dev/null`);
+        const spawnedWindows: Array<{id: string, name: string, harness: string}> = [];
+        
+        if (windowsOutput) {
+          windowsOutput.trim().split('\n').forEach(line => {
+            const [winId, ...nameParts] = line.split(':');
+            const windowName = nameParts.join(':').trim();
+            // Skip the main window (agentmux) and check if it's a spawned agent
+            if (windowName !== 'agentmux' && !fixedAgents.find(a => a.name === windowName)) {
+              // Try to determine harness from window name or default to unknown
+              spawnedWindows.push({
+                id: winId.trim(),
+                name: windowName,
+                harness: 'unknown'
+              });
+            }
+          });
+        }
+        
+        if (spawnedWindows.length > 0) {
+          console.log(chalk.yellow('\nSpawned Windows:'));
+          spawnedWindows.forEach(win => {
+            console.log(`  Window ${win.id}: ${chalk.bold(win.name)} (${win.harness}) - ${chalk.green('● running')}`);
+          });
+        }
+      } catch {}
+      
+      const totalAgents = fixedAgents.length + (spawnedWindows?.length || 0);
+      console.log(chalk.gray(`\nTotal: ${totalAgents}/11 agents`));
+      console.log();
       
       console.log(chalk.gray('Quick commands:'));
       console.log(`  ${chalk.cyan('agentmux send nui "message"')}  - Send to nui`);
-      console.log(`  ${chalk.cyan('agentmux send sam "message"')}  - Send to sam`);
-      console.log(`  ${chalk.cyan('agentmux send wit "message"')}  - Send to wit`);
-      console.log(`  ${chalk.cyan('agentmux status')}             - View live status`);
+      console.log(`  ${chalk.cyan('agentmux spawn opencode max')}  - Spawn new agent`);
+      console.log(`  ${chalk.cyan('agentmux kill sam')}            - Kill specific agent`);
+      console.log(`  ${chalk.cyan('agentmux stop')}                - Kill all agents`);
       console.log();
     } catch (e) {
       console.log(chalk.red('❌ No active AgentMux session. Run: agentmux start\n'));
@@ -631,6 +661,118 @@ program
       console.log(chalk.green('\n✅ AgentMux session stopped\n'));
     } catch {
       console.log(chalk.yellow('\n⚠️  No active AgentMux session found\n'));
+    }
+  });
+
+program
+  .command('spawn <harness> <agent-name>')
+  .description('Spawn a new agent in a new tmux window (max 11 total agents)')
+  .action((harness: string, agentName: string) => {
+    if (!checkTmux()) return;
+    
+    // Validate harness
+    if (harness !== 'opencode' && harness !== 'claude') {
+      console.log(chalk.red('\n❌ Invalid harness. Use: opencode or claude\n'));
+      return;
+    }
+    
+    const session = getSessionName();
+    const currentDir = process.cwd();
+    
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t ${session} 2>/dev/null`);
+    } catch {
+      console.log(chalk.red('\n❌ No active AgentMux session. Run: agentmux start\n'));
+      return;
+    }
+    
+    // Check agent limit (max 11)
+    try {
+      const windowCount = execSync(`tmux list-windows -t ${session} | wc -l`, { encoding: 'utf-8' });
+      const paneCount = execSync(`tmux list-panes -t ${session} | wc -l`, { encoding: 'utf-8' });
+      const totalAgents = parseInt(windowCount.trim()) + parseInt(paneCount.trim()) - 1; // -1 for main window
+      
+      if (totalAgents >= 11) {
+        console.log(chalk.red('\n❌ Agent limit reached (11 max). Kill an agent first.\n'));
+        return;
+      }
+    } catch {}
+    
+    // Check if agent name already exists
+    try {
+      execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
+      console.log(chalk.red(`\n❌ Agent "${agentName}" already exists\n`));
+      return;
+    } catch {
+      // Name is available, continue
+    }
+    
+    console.log(chalk.blue(`\n🌊 Spawning ${agentName} (${harness})...\n`));
+    
+    try {
+      // Create new window with agent name
+      execSync(`tmux new-window -t ${session} -n "${agentName}"`);
+      
+      // Start the harness
+      const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
+      execSync(`tmux send-keys -t ${session}:${agentName} "${cmd}" C-m`);
+      
+      console.log(chalk.green(`✅ Agent "${agentName}" spawned successfully!`));
+      console.log(chalk.gray(`   Window: ${agentName}`));
+      console.log(chalk.gray(`   Harness: ${harness}`));
+      console.log(chalk.gray(`   Switch: Ctrl+B w (then select ${agentName})\n`));
+    } catch (e) {
+      console.log(chalk.red(`\n❌ Failed to spawn agent: ${e}\n`));
+    }
+  });
+
+program
+  .command('kill <agent-name>')
+  .description('Kill a specific agent window')
+  .action((agentName: string) => {
+    if (!checkTmux()) return;
+    
+    const session = getSessionName();
+    
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t ${session} 2>/dev/null`);
+    } catch {
+      console.log(chalk.red('\n❌ No active AgentMux session.\n'));
+      return;
+    }
+    
+    console.log(chalk.blue(`\n💀 Killing ${agentName}...`));
+    
+    try {
+      // Check if it's a window
+      try {
+        execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
+        // It's a window, kill it
+        execSync(`tmux kill-window -t ${session}:${agentName}`);
+        console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
+        return;
+      } catch {
+        // Not a window, check if it's a fixed pane agent
+        const paneMap: {[key: string]: number} = {
+          'nui': 1,
+          'sam': 2,
+          'wit': 3
+        };
+        
+        if (paneMap[agentName] !== undefined) {
+          // Kill the pane
+          execSync(`tmux kill-pane -t ${session}:0.${paneMap[agentName]}`);
+          console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
+          return;
+        }
+        
+        // Not found
+        console.log(chalk.red(`\n❌ Agent "${agentName}" not found\n`));
+      }
+    } catch (e) {
+      console.log(chalk.red(`\n❌ Failed to kill agent: ${e}\n`));
     }
   });
 
@@ -741,6 +883,29 @@ jj log --template "author ++ ": " ++ description"
 - \`AGENTMUX_AGENT\` - Your agent name (nui/sam/wit)
 - \`AGENTMUX_PROJECT\` - Project directory path
 
+## Spawn and Kill Agents
+
+### Spawn a new agent (max 11 total):
+\`\`\`bash
+agentmux spawn <harness> <agent-name>
+# Examples:
+agentmux spawn opencode max    # Create "max" with opencode
+agentmux spawn claude alex     # Create "alex" with claude
+\`\`\`
+
+### Kill an agent:
+\`\`\`bash
+agentmux kill <agent-name>
+# Examples:
+agentmux kill max      # Kill the "max" agent
+agentmux kill nui      # Kill nui (can respawn later)
+\`\`\`
+
+### Kill all agents:
+\`\`\`bash
+agentmux stop          # Kills entire tmux session
+\`\`\`
+
 ## Tips
 
 - Use descriptive commit messages: "@nui implemented auth API"
@@ -749,6 +914,7 @@ jj log --template "author ++ ": " ++ description"
 - Press Ctrl+B then Z to zoom a pane, Z again to unzoom
 - Your messages appear in other agents' terminals immediately
 - Use \`agentmux stop\` to kill the session when done
+- You can kill and respawn agents as needed (max 11 total)
 `;
 }
 

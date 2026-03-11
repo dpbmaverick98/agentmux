@@ -2828,7 +2828,7 @@ program2.command("list").description("List all agents with their status and harn
 \uD83D\uDCCB AgentMux Agents
 `));
   const session = getSessionName();
-  const agents = [
+  const fixedAgents = [
     { pane: 0, name: "status", harness: "monitor", desc: "Status Monitor" },
     { pane: 1, name: "nui", harness: "opencode", desc: "Agent Nui" },
     { pane: 2, name: "sam", harness: "opencode", desc: "Agent Sam" },
@@ -2844,21 +2844,47 @@ program2.command("list").description("List all agents with their status and harn
         paneCommands[paneNum.trim()] = cmdParts.join(":").trim();
       });
     }
-    agents.forEach((agent) => {
+    console.log(source_default.yellow("Fixed Panes:"));
+    fixedAgents.forEach((agent) => {
       const cmd = paneCommands[agent.pane.toString()] || "not running";
       const status = cmd !== "not running" ? source_default.green("\u25CF running") : source_default.gray("\u25CB offline");
-      console.log(`${source_default.yellow(`Pane ${agent.pane}:`)} ${source_default.bold(agent.name)} (${agent.harness})`);
-      console.log(`         ${source_default.gray(agent.desc)}`);
-      console.log(`         Status: ${status}`);
-      console.log(`         Command: ${source_default.gray(cmd)}`);
-      console.log(`         Send message: ${source_default.cyan(`agentmux send ${agent.name} "hello"`)}`);
-      console.log();
+      console.log(`  Pane ${agent.pane}: ${source_default.bold(agent.name)} (${agent.harness}) - ${status}`);
+      console.log(`           ${source_default.gray(cmd)}`);
     });
+    try {
+      const windowsOutput = exec(`tmux list-windows -t ${session} -F "#I: #W" 2>/dev/null`);
+      const spawnedWindows2 = [];
+      if (windowsOutput) {
+        windowsOutput.trim().split(`
+`).forEach((line) => {
+          const [winId, ...nameParts] = line.split(":");
+          const windowName = nameParts.join(":").trim();
+          if (windowName !== "agentmux" && !fixedAgents.find((a) => a.name === windowName)) {
+            spawnedWindows2.push({
+              id: winId.trim(),
+              name: windowName,
+              harness: "unknown"
+            });
+          }
+        });
+      }
+      if (spawnedWindows2.length > 0) {
+        console.log(source_default.yellow(`
+Spawned Windows:`));
+        spawnedWindows2.forEach((win) => {
+          console.log(`  Window ${win.id}: ${source_default.bold(win.name)} (${win.harness}) - ${source_default.green("\u25CF running")}`);
+        });
+      }
+    } catch {}
+    const totalAgents = fixedAgents.length + (spawnedWindows?.length || 0);
+    console.log(source_default.gray(`
+Total: ${totalAgents}/11 agents`));
+    console.log();
     console.log(source_default.gray("Quick commands:"));
     console.log(`  ${source_default.cyan('agentmux send nui "message"')}  - Send to nui`);
-    console.log(`  ${source_default.cyan('agentmux send sam "message"')}  - Send to sam`);
-    console.log(`  ${source_default.cyan('agentmux send wit "message"')}  - Send to wit`);
-    console.log(`  ${source_default.cyan("agentmux status")}             - View live status`);
+    console.log(`  ${source_default.cyan("agentmux spawn opencode max")}  - Spawn new agent`);
+    console.log(`  ${source_default.cyan("agentmux kill sam")}            - Kill specific agent`);
+    console.log(`  ${source_default.cyan("agentmux stop")}                - Kill all agents`);
     console.log();
   } catch (e) {
     console.log(source_default.red(`\u274C No active AgentMux session. Run: agentmux start
@@ -2875,6 +2901,104 @@ program2.command("stop").description("Stop the AgentMux tmux session").action(()
   } catch {
     console.log(source_default.yellow(`
 \u26A0\uFE0F  No active AgentMux session found
+`));
+  }
+});
+program2.command("spawn <harness> <agent-name>").description("Spawn a new agent in a new tmux window (max 11 total agents)").action((harness, agentName) => {
+  if (!checkTmux())
+    return;
+  if (harness !== "opencode" && harness !== "claude") {
+    console.log(source_default.red(`
+\u274C Invalid harness. Use: opencode or claude
+`));
+    return;
+  }
+  const session = getSessionName();
+  const currentDir = process.cwd();
+  try {
+    execSync(`tmux has-session -t ${session} 2>/dev/null`);
+  } catch {
+    console.log(source_default.red(`
+\u274C No active AgentMux session. Run: agentmux start
+`));
+    return;
+  }
+  try {
+    const windowCount = execSync(`tmux list-windows -t ${session} | wc -l`, { encoding: "utf-8" });
+    const paneCount = execSync(`tmux list-panes -t ${session} | wc -l`, { encoding: "utf-8" });
+    const totalAgents = parseInt(windowCount.trim()) + parseInt(paneCount.trim()) - 1;
+    if (totalAgents >= 11) {
+      console.log(source_default.red(`
+\u274C Agent limit reached (11 max). Kill an agent first.
+`));
+      return;
+    }
+  } catch {}
+  try {
+    execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
+    console.log(source_default.red(`
+\u274C Agent "${agentName}" already exists
+`));
+    return;
+  } catch {}
+  console.log(source_default.blue(`
+\uD83C\uDF0A Spawning ${agentName} (${harness})...
+`));
+  try {
+    execSync(`tmux new-window -t ${session} -n "${agentName}"`);
+    const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
+    execSync(`tmux send-keys -t ${session}:${agentName} "${cmd}" C-m`);
+    console.log(source_default.green(`\u2705 Agent "${agentName}" spawned successfully!`));
+    console.log(source_default.gray(`   Window: ${agentName}`));
+    console.log(source_default.gray(`   Harness: ${harness}`));
+    console.log(source_default.gray(`   Switch: Ctrl+B w (then select ${agentName})
+`));
+  } catch (e) {
+    console.log(source_default.red(`
+\u274C Failed to spawn agent: ${e}
+`));
+  }
+});
+program2.command("kill <agent-name>").description("Kill a specific agent window").action((agentName) => {
+  if (!checkTmux())
+    return;
+  const session = getSessionName();
+  try {
+    execSync(`tmux has-session -t ${session} 2>/dev/null`);
+  } catch {
+    console.log(source_default.red(`
+\u274C No active AgentMux session.
+`));
+    return;
+  }
+  console.log(source_default.blue(`
+\uD83D\uDC80 Killing ${agentName}...`));
+  try {
+    try {
+      execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
+      execSync(`tmux kill-window -t ${session}:${agentName}`);
+      console.log(source_default.green(`\u2705 Agent "${agentName}" killed
+`));
+      return;
+    } catch {
+      const paneMap = {
+        nui: 1,
+        sam: 2,
+        wit: 3
+      };
+      if (paneMap[agentName] !== undefined) {
+        execSync(`tmux kill-pane -t ${session}:0.${paneMap[agentName]}`);
+        console.log(source_default.green(`\u2705 Agent "${agentName}" killed
+`));
+        return;
+      }
+      console.log(source_default.red(`
+\u274C Agent "${agentName}" not found
+`));
+    }
+  } catch (e) {
+    console.log(source_default.red(`
+\u274C Failed to kill agent: ${e}
 `));
   }
 });
@@ -2984,6 +3108,29 @@ jj log --template "author ++ ": " ++ description"
 - \`AGENTMUX_AGENT\` - Your agent name (nui/sam/wit)
 - \`AGENTMUX_PROJECT\` - Project directory path
 
+## Spawn and Kill Agents
+
+### Spawn a new agent (max 11 total):
+\`\`\`bash
+agentmux spawn <harness> <agent-name>
+# Examples:
+agentmux spawn opencode max    # Create "max" with opencode
+agentmux spawn claude alex     # Create "alex" with claude
+\`\`\`
+
+### Kill an agent:
+\`\`\`bash
+agentmux kill <agent-name>
+# Examples:
+agentmux kill max      # Kill the "max" agent
+agentmux kill nui      # Kill nui (can respawn later)
+\`\`\`
+
+### Kill all agents:
+\`\`\`bash
+agentmux stop          # Kills entire tmux session
+\`\`\`
+
 ## Tips
 
 - Use descriptive commit messages: "@nui implemented auth API"
@@ -2992,6 +3139,7 @@ jj log --template "author ++ ": " ++ description"
 - Press Ctrl+B then Z to zoom a pane, Z again to unzoom
 - Your messages appear in other agents' terminals immediately
 - Use \`agentmux stop\` to kill the session when done
+- You can kill and respawn agents as needed (max 11 total)
 `;
 }
 program2.parse();
