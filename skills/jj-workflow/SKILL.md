@@ -54,9 +54,37 @@ jj abandon <rev>      # Delete change
 - **Auto snapshots** - Work is saved as you edit
 - **Better conflicts** - Multiple heads allowed
 
+## Critical: Use JJ, Not Git
+
+**⚠️ ALWAYS use JJ commands. Never use `git commit` directly.**
+
+JJ is colocated with git. Using `git commit` creates git commits that JJ doesn't track, causing your changes to disappear from the status pane where other agents can see them.
+
+### The AgentMux Workflow
+
+```bash
+# 1. Make changes - edit files normally
+# 2. Create JJ change (this is your "commit")
+jj new -m "@$AGENTMUX_AGENT: what you did"
+
+# 3. Push to GitHub (creates branch automatically)
+jj git push
+
+# 4. Create PR
+gh pr create --title "..." --body "..."
+```
+
+### Common Mistake to Avoid
+
+❌ **DON'T:** `git add . && git commit -m "message"`
+✅ **DO:** `jj new -m "@nui: message"`
+
+The status pane shows JJ working copy changes (refreshes every 3 seconds). If you use git directly, other agents won't see your work in progress.
+
 ## Tips
 
-- Commit often with descriptive messages
+- Create JJ changes often with descriptive messages
 - Use @agent tags for accountability
 - Check `jj log` to see team progress
 - Status pane refreshes every 3 seconds
+- If you accidentally use git, run `jj new` to capture the state in JJ
