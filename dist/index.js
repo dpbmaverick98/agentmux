@@ -2495,12 +2495,19 @@ auto_refresh_interval = 3
 show_idle_indicator = true
 `;
   fs.writeFileSync(path.join(agentMuxDir, "config.toml"), config);
-  fs.mkdirSync(path.join(agentMuxDir, "skills", "agentmux"), { recursive: true });
-  fs.mkdirSync(path.join(agentMuxDir, "skills", "jj-workflow"), { recursive: true });
-  const agentmuxSkillContent = generateAgentmuxSkill(name);
-  const jjSkillContent = generateJJSkill(name);
-  fs.writeFileSync(path.join(agentMuxDir, "skills", "agentmux", "SKILL.md"), agentmuxSkillContent);
-  fs.writeFileSync(path.join(agentMuxDir, "skills", "jj-workflow", "SKILL.md"), jjSkillContent);
+  const agentmuxInstallDir = path.dirname(process.argv[1]);
+  const skillsSourceDir = path.join(agentmuxInstallDir, "..", "skills");
+  const skillsTargetDir = path.join(agentMuxDir, "skills");
+  try {
+    if (fs.existsSync(skillsSourceDir)) {
+      fs.cpSync(skillsSourceDir, skillsTargetDir, { recursive: true });
+    } else {
+      fs.mkdirSync(path.join(skillsTargetDir, "agentmux"), { recursive: true });
+      fs.mkdirSync(path.join(skillsTargetDir, "jj-workflow"), { recursive: true });
+    }
+  } catch (e) {
+    console.log(source_default.yellow("  \u26A0\uFE0F  Could not copy skills, directories created for manual install"));
+  }
   fs.writeFileSync(path.join(agentMuxDir, "shared", "plan.md"), `# Plan for ${name}
 
 Add your multi-agent plan here.
@@ -3006,153 +3013,4 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
 `));
   }
 });
-function generateAgentmuxSkill(projectName) {
-  return `---
-name: agentmux
-description: AgentMux multi-agent terminal commands for cross-agent messaging, spawning/killing agents, and status monitoring. Use when working with other agents in the tmux environment, sending messages between agents, managing agent lifecycle, or checking system status.
----
-
-# AgentMux Commands
-
-Multi-agent terminal multiplexer using tmux with 3 core agents (nui, sam, wit).
-
-## Your Identity
-
-You are: **$AGENTMUX_AGENT** running on **${process.env.AGENTMUX_AGENT === "wit" ? "claude" : "opencode"}**
-
-## The Team
-
-- **nui** (opencode) - Top-right pane
-- **sam** (opencode) - Bottom-left pane
-- **wit** (claude) - Bottom-right pane
-- **status** (monitor) - Top-left pane
-
-## Core Commands
-
-### List all agents and their status
-\`\`\`bash
-agentmux list
-\`\`\`
-
-### Send message to another agent
-\`\`\`bash
-agentmux send <agent> "message"
-# Example: agentmux send sam "Can you review my code?"
-\`\`\`
-Recipient sees: \`\uD83D\uDCE8 [@nui \u2192 @sam]: Can you review my code?\`
-
-### Spawn new agent (max 11 total)
-\`\`\`bash
-agentmux spawn <harness> <name>
-# Examples:
-agentmux spawn opencode helper
-agentmux spawn claude reviewer
-\`\`\`
-
-### Kill specific agent
-\`\`\`bash
-agentmux kill <agent>
-# Examples:
-agentmux kill helper
-agentmux kill nui
-\`\`\`
-
-### Kill all agents
-\`\`\`bash
-agentmux stop
-\`\`\`
-
-### View live status
-\`\`\`bash
-agentmux status
-\`\`\`
-
-## Environment Variables
-
-- \`AGENTMUX_AGENT\` - Your agent name
-- \`AGENTMUX_PROJECT\` - Project directory path
-
-## tmux Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+B \u2191\u2193\u2190\u2192 | Move between panes |
-| Ctrl+B z | Zoom pane |
-| Ctrl+B d | Detach session |
-| Click | Switch panes |
-
-## Quick Workflow
-
-1. \`agentmux list\` - Check who's online
-2. Work on task
-3. \`agentmux send <agent> "message"\` - Communicate
-4. \`jj log\` - Check what others committed
-5. \`agentmux spawn opencode helper\` - Add helpers if needed
-`;
-}
-function generateJJSkill(projectName) {
-  return `---
-name: jj-workflow
-description: JJ (Jujutsu) version control workflow for multi-agent collaboration with automatic change tracking, mutable history, and agent tagging conventions. Use when creating commits, viewing history, or managing code changes in the AgentMux environment.
----
-
-# JJ Workflow
-
-Git-compatible version control with automatic tracking and mutable history.
-
-## Core Commands
-
-### Create a change
-\`\`\`bash
-jj new -m "@$AGENTMUX_AGENT: description"
-
-# Examples:
-jj new -m "@nui: Designed auth API"
-jj new -m "@sam: Implemented login endpoint"
-\`\`\`
-
-### View changes
-\`\`\`bash
-jj status              # Current state
-jj diff                # Uncommitted changes
-jj log                 # Commit history
-\`\`\`
-
-### Update change description
-\`\`\`bash
-jj describe -m "@$AGENTMUX_AGENT: updated - what changed"
-\`\`\`
-
-## Agent Tagging Convention
-
-Always use @agent prefix:
-- \`@nui:\` - nui's work
-- \`@sam:\` - sam's work
-- \`@wit:\` - wit's work
-- \`@name:\` - spawned agents
-
-## Navigation
-
-\`\`\`bash
-jj prev                # Previous change
-jj next                # Next change
-jj checkout <rev>     # Jump to revision
-jj abandon <rev>      # Delete change
-\`\`\`
-
-## JJ vs Git
-
-- **No staging area** - Auto-tracked changes
-- **Mutable history** - Edit commits anytime
-- **Auto snapshots** - Work is saved as you edit
-- **Better conflicts** - Multiple heads allowed
-
-## Tips
-
-- Commit often with descriptive messages
-- Use @agent tags for accountability
-- Check \`jj log\` to see team progress
-- Status pane refreshes every 3 seconds
-`;
-}
 program2.parse();
