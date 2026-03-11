@@ -150,22 +150,24 @@ Messages appear directly in the agent's terminal:
 ```
 project/
 ├── .agentmux/
-│   ├── .jj/                 # JJ version control
-│   ├── config.toml          # Project config
+│   ├── .jj/                        # JJ version control
+│   ├── config.toml                 # Project config
 │   ├── skills/
-│   │   ├── agentmux.md      # AgentMux commands
-│   │   └── jj-workflow.md   # JJ workflow guide
+│   │   ├── agentmux/
+│   │   │   └── SKILL.md            # AgentMux commands skill
+│   │   └── jj-workflow/
+│   │       └── SKILL.md            # JJ workflow skill
 │   └── shared/
-│       ├── plan.md          # Project plan
-│       └── messages.txt     # Message log
+│       ├── plan.md                 # Project plan
+│       └── messages.txt            # Message log
 └── [your project files]
 ```
 
 ## Agent Skills
 
-Each agent automatically receives two skill files in `.agentmux/skills/`:
+Each agent automatically receives two Claude-formatted skills in `.agentmux/skills/`:
 
-### `agentmux.md`
+### `agentmux/SKILL.md`
 AgentMux-specific commands and workflows:
 - Available commands (`agentmux list`, `agentmux send`, `agentmux spawn`, etc.)
 - How to message other agents
@@ -173,7 +175,7 @@ AgentMux-specific commands and workflows:
 - Environment variables
 - Keyboard shortcuts
 
-### `jj-workflow.md`
+### `jj-workflow/SKILL.md`
 Complete JJ version control guide:
 - Creating and updating changes
 - Viewing commit history
