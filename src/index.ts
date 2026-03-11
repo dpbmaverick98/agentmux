@@ -474,8 +474,10 @@ program
 
       if (paneNum !== undefined) {
         // Send message using printf to avoid echo interpretation issues
-        // Use single quotes around the message to preserve spaces
-        execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, '\\"')}\n"' C-m`);
+        // Send command and Enter separately - C-m doesn't work when bundled
+        execSync(`tmux send-keys -t ${session}:0.${paneNum} C-c`);
+        execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, '\\"')}\n"'`);
+        execSync(`tmux send-keys -t ${session}:0.${paneNum} Enter`);
         console.log(chalk.green(`✅ Message sent to ${to}`));
         
         // Log message to messages.txt with timestamp

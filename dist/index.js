@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 // @bun
-import { createRequire } from "node:module";
 var __create = Object.create;
 var __getProtoOf = Object.getPrototypeOf;
 var __defProp = Object.defineProperty;
@@ -18,7 +17,7 @@ var __toESM = (mod, isNodeMode, target) => {
   return to;
 };
 var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
-var __require = /* @__PURE__ */ createRequire(import.meta.url);
+var __require = import.meta.require;
 
 // node_modules/commander/lib/error.js
 var require_error = __commonJS((exports) => {
@@ -343,7 +342,7 @@ var require_help = __commonJS((exports) => {
       return Math.max(helper.longestOptionTermLength(cmd, helper), helper.longestGlobalOptionTermLength(cmd, helper), helper.longestSubcommandTermLength(cmd, helper), helper.longestArgumentTermLength(cmd, helper));
     }
     wrap(str, width, indent, minColumnWidth = 40) {
-      const indents = " \\f\\t\\v   -   　\uFEFF";
+      const indents = " \\f\\t\\v\xA0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF";
       const manualIndent = new RegExp(`[\\n][${indents}]+`);
       if (str.match(manualIndent))
         return str;
@@ -355,7 +354,7 @@ var require_help = __commonJS((exports) => {
 `, `
 `);
       const indentString = " ".repeat(indent);
-      const zeroWidthSpace = "​";
+      const zeroWidthSpace = "\u200B";
       const breaks = `\\s${zeroWidthSpace}`;
       const regex = new RegExp(`
 |.{1,${columnWidth - 1}}([${breaks}]|$)|[^${breaks}]+?([${breaks}]|$)`, "g");
@@ -598,11 +597,11 @@ var require_suggestSimilar = __commonJS((exports) => {
 
 // node_modules/commander/lib/command.js
 var require_command = __commonJS((exports) => {
-  var EventEmitter = __require("node:events").EventEmitter;
-  var childProcess = __require("node:child_process");
-  var path = __require("node:path");
-  var fs = __require("node:fs");
-  var process2 = __require("node:process");
+  var EventEmitter = __require("events").EventEmitter;
+  var childProcess = __require("child_process");
+  var path = __require("path");
+  var fs = __require("fs");
+  var process2 = __require("process");
   var { Argument, humanReadableArgName } = require_argument();
   var { CommanderError } = require_error();
   var { Help } = require_help();
@@ -2053,9 +2052,9 @@ var ansiStyles = assembleStyles();
 var ansi_styles_default = ansiStyles;
 
 // node_modules/chalk/source/vendor/supports-color/index.js
-import process2 from "node:process";
-import os from "node:os";
-import tty from "node:tty";
+import process2 from "process";
+import os from "os";
+import tty from "tty";
 function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : process2.argv) {
   const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
   const position = argv.indexOf(prefix + flag);
@@ -2742,8 +2741,10 @@ program2.command("send <to> <message...>").description("Send a message to anothe
     };
     const paneNum = paneMap[to.toLowerCase()];
     if (paneNum !== undefined) {
+      execSync(`tmux send-keys -t ${session}:0.${paneNum} C-c`);
       execSync(`tmux send-keys -t ${session}:0.${paneNum} 'printf "${displayMsg.replace(/"/g, "\\\"")}
-"' C-m`);
+"'`);
+      execSync(`tmux send-keys -t ${session}:0.${paneNum} Enter`);
       console.log(source_default.green(`\u2705 Message sent to ${to}`));
       const messagesPath = path.join(agentMuxDir, "shared", "messages.txt");
       const logEntry = `[${timestamp}] ${displayMsg}
