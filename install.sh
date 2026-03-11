@@ -46,25 +46,25 @@ else
     else
         # Download pre-compiled binary from GitHub releases
         echo "    Downloading pre-compiled binary..."
-        JJ_VERSION="0.27.0"
+        JJ_VERSION="0.39.0"
         JJ_ARCH="$(uname -m)"
         
-        # Map architecture names
+        # Map architecture names (jj uses musl for Linux)
         case "$JJ_ARCH" in
             x86_64)
-                JJ_ARCH="x86_64-unknown-linux-gnu"
+                JJ_ARCH="x86_64-unknown-linux-musl"
                 ;;
             aarch64|arm64)
-                JJ_ARCH="aarch64-unknown-linux-gnu"
+                JJ_ARCH="aarch64-unknown-linux-musl"
                 ;;
             *)
                 echo "❌ Unsupported architecture: $JJ_ARCH"
-                echo "   Please install jj manually: https://github.com/martinvonz/jj"
+                echo "   Please install jj manually: https://github.com/jj-vcs/jj"
                 exit 1
                 ;;
         esac
         
-        JJ_URL="https://github.com/martinvonz/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${JJ_ARCH}.tar.gz"
+        JJ_URL="https://github.com/jj-vcs/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${JJ_ARCH}.tar.gz"
         
         # Download and extract
         curl -fsSL "$JJ_URL" | tar -xz -C /tmp
