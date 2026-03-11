@@ -2407,8 +2407,9 @@ function getJJStateHash(agentMuxDir) {
     const jjDir = path.join(agentMuxDir, ".jj");
     if (!fs.existsSync(jjDir))
       return "no-repo";
+    const projectRoot = path.dirname(agentMuxDir);
     const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
-      cwd: process.cwd(),
+      cwd: projectRoot,
       encoding: "utf-8"
     });
     return crypto.createHash("md5").update(log).digest("hex");
@@ -2525,7 +2526,7 @@ Directory structure:`));
   console.log(source_default.gray(`
 Next step: agentmux start`));
 });
-program2.command("start").description("Start full AgentMux environment with 4 panes").option("--kimi", "Enable kimi agent", true).option("--minimax", "Enable minimax agent", true).option("--claude", "Enable claude agent", true).action((options) => {
+program2.command("start").description("Start full AgentMux environment with 4 panes").option("--nui", "Enable nui agent", true).option("--sam", "Enable sam agent", true).option("--wit", "Enable wit agent", true).action((options) => {
   const hasTmux = checkTmux();
   const hasJJ = checkJJ();
   if (!hasTmux || !hasJJ) {
@@ -2553,50 +2554,54 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   console.log(source_default.gray("Creating 4-pane split screen..."));
   execSync(`tmux new-session -d -s ${session} -n agentmux`);
   execSync(`tmux set -t ${session} mouse on`);
-  console.log(source_default.gray("Creating kimi pane..."));
+  console.log(source_default.gray("Creating nui pane..."));
   execSync(`tmux split-window -h -t ${session}`);
-  console.log(source_default.gray("Creating minimax pane..."));
+  console.log(source_default.gray("Creating sam pane..."));
   execSync(`tmux select-pane -t ${session}:0.0`);
   execSync(`tmux split-window -v -t ${session}`);
-  console.log(source_default.gray("Creating claude pane..."));
+  console.log(source_default.gray("Creating wit pane..."));
   execSync(`tmux select-pane -t ${session}:0.1`);
   execSync(`tmux split-window -v -t ${session}`);
   console.log(source_default.gray("Setting up status pane..."));
   execSync(`tmux select-pane -t ${session}:0.0`);
+  execSync(`tmux select-pane -t ${session}:0.0 -T "status"`);
   execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
-  if (options.kimi) {
-    console.log(source_default.gray("Starting kimi..."));
+  if (options.nui) {
+    console.log(source_default.gray("Starting nui..."));
     execSync(`tmux select-pane -t ${session}:0.1`);
+    execSync(`tmux select-pane -t ${session}:0.1 -T "nui (opencode)"`);
     execSync(`tmux send-keys -t ${session}:0.1 "clear" C-m`);
-    const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${currentDir} opencode`;
-    execSync(`tmux send-keys -t ${session}:0.1 "${kimiCmd}" C-m`);
+    const nuiCmd = `AGENTMUX_AGENT=nui AGENTMUX_PROJECT=${currentDir} opencode`;
+    execSync(`tmux send-keys -t ${session}:0.1 "${nuiCmd}" C-m`);
   }
-  if (options.minimax) {
-    console.log(source_default.gray("Starting minimax..."));
+  if (options.sam) {
+    console.log(source_default.gray("Starting sam..."));
     execSync(`tmux select-pane -t ${session}:0.2`);
+    execSync(`tmux select-pane -t ${session}:0.2 -T "sam (opencode)"`);
     execSync(`tmux send-keys -t ${session}:0.2 "clear" C-m`);
-    const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${currentDir} opencode`;
-    execSync(`tmux send-keys -t ${session}:0.2 "${minimaxCmd}" C-m`);
+    const samCmd = `AGENTMUX_AGENT=sam AGENTMUX_PROJECT=${currentDir} opencode`;
+    execSync(`tmux send-keys -t ${session}:0.2 "${samCmd}" C-m`);
   }
-  if (options.claude) {
-    console.log(source_default.gray("Starting claude..."));
+  if (options.wit) {
+    console.log(source_default.gray("Starting wit..."));
     execSync(`tmux select-pane -t ${session}:0.3`);
+    execSync(`tmux select-pane -t ${session}:0.3 -T "wit (claude)"`);
     execSync(`tmux send-keys -t ${session}:0.3 "clear" C-m`);
-    const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${currentDir} claude`;
-    execSync(`tmux send-keys -t ${session}:0.3 "${claudeCmd}" C-m`);
+    const witCmd = `AGENTMUX_AGENT=wit AGENTMUX_PROJECT=${currentDir} claude`;
+    execSync(`tmux send-keys -t ${session}:0.3 "${witCmd}" C-m`);
   }
   execSync(`tmux select-layout -t ${session} tiled`);
   console.log(source_default.green(`
 \u2705 AgentMux environment ready!`));
   console.log(source_default.yellow(`
 \uD83D\uDDA5\uFE0F  Split Screen Layout:`));
-  console.log(source_default.white("   \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"));
-  console.log(source_default.white("   \u2502    STATUS     \u2502     KIMI      \u2502"));
-  console.log(source_default.white("   \u2502   (top-left)  \u2502  (top-right)  \u2502"));
-  console.log(source_default.white("   \u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"));
-  console.log(source_default.white("   \u2502    MINIMAX    \u2502    CLAUDE     \u2502"));
-  console.log(source_default.white("   \u2502 (bottom-left) \u2502 (bottom-right)\u2502"));
-  console.log(source_default.white("   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"));
+  console.log(source_default.white("   \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"));
+  console.log(source_default.white("   \u2502       STATUS        \u2502   nui (opencode)    \u2502"));
+  console.log(source_default.white("   \u2502     (top-left)      \u2502    (top-right)      \u2502"));
+  console.log(source_default.white("   \u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"));
+  console.log(source_default.white("   \u2502   sam (opencode)    \u2502    wit (claude)     \u2502"));
+  console.log(source_default.white("   \u2502   (bottom-left)     \u2502   (bottom-right)    \u2502"));
+  console.log(source_default.white("   \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"));
   console.log(source_default.blue(`
 \uD83D\uDD17 Attaching now...`));
   console.log(source_default.yellow("   \uD83D\uDDB1\uFE0F  MOUSE ENABLED: Click to switch panes!"));
@@ -2631,7 +2636,10 @@ program2.command("status").description("Show live status with auto-refresh (runs
       try {
         const jjDir = path.join(agentMuxDir, ".jj");
         if (fs.existsSync(jjDir)) {
-          const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n" 2>/dev/null || echo "  No changes yet"');
+          const projectRoot = path.dirname(agentMuxDir);
+          const log = exec('jj log --no-graph --template "change_id.short() ++ " " ++ description\\n" 2>/dev/null || echo "  No changes yet"', {
+            cwd: projectRoot
+          });
           if (log && log.trim()) {
             console.log(log);
           } else {
@@ -2652,7 +2660,7 @@ Active Agents:`));
       const session = getSessionName();
       const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
       if (output) {
-        const panes = ["Status", "Kimi", "Minimax", "Claude"];
+        const panes = ["Status", "nui (opencode)", "sam (opencode)", "wit (claude)"];
         output.trim().split(`
 `).forEach((line, idx) => {
           const paneName = panes[idx] || `Pane ${idx}`;
@@ -2696,15 +2704,11 @@ Recent Messages:`));
     if (currentState !== lastState) {
       lastState = currentState;
       lastUpdateTime = Date.now();
-      renderStatus();
     }
+    renderStatus();
   }, 3000);
-  const idleInterval = setInterval(() => {
-    process.stdout.write(`\x1B[2A\r${source_default.gray(`\u23F1\uFE0F  Last update: ${Math.floor((Date.now() - lastUpdateTime) / 1000)}s ago`)}\x1B[2B`);
-  }, 1000);
   process.on("SIGINT", () => {
     clearInterval(pollInterval);
-    clearInterval(idleInterval);
     console.log(source_default.gray(`
 
 \uD83D\uDC4B Status monitor stopped
@@ -2719,20 +2723,21 @@ program2.command("send <to> <message...>").description("Send a message to anothe
   const session = getSessionName();
   const msg = message.join(" ");
   const from = process.env.AGENTMUX_AGENT || "user";
-  const fullMsg = `echo "\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}"`;
+  const escapedMsg = msg.replace(/"/g, "\\\"").replace(/'/g, "\\'");
+  const fullMsg = `echo "\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${escapedMsg}"`;
   try {
     const paneMap = {
       status: 0,
-      kimi: 1,
-      minimax: 2,
-      claude: 3
+      nui: 1,
+      sam: 2,
+      wit: 3
     };
     const paneNum = paneMap[to.toLowerCase()];
     if (paneNum !== undefined) {
       execSync(`tmux send-keys -t ${session}:0.${paneNum} "${fullMsg}" C-m`);
       console.log(source_default.green(`\u2705 Message sent to ${to}`));
     } else {
-      console.log(source_default.red(`\u274C Unknown agent: ${to}. Try: status, kimi, minimax, claude`));
+      console.log(source_default.red(`\u274C Unknown agent: ${to}. Try: status, nui, sam, wit`));
     }
   } catch (e) {
     console.log(source_default.red(`\u274C Failed to send to ${to}. Is the session running?`));

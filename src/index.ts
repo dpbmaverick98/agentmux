@@ -56,8 +56,10 @@ function getJJStateHash(agentMuxDir: string): string {
     const jjDir = path.join(agentMuxDir, '.jj');
     if (!fs.existsSync(jjDir)) return 'no-repo';
 
+    // Run jj from the project root (parent of .agentmux/)
+    const projectRoot = path.dirname(agentMuxDir);
     const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
-      cwd: process.cwd(),
+      cwd: projectRoot,
       encoding: 'utf-8'
     });
     return crypto.createHash('md5').update(log).digest('hex');
@@ -197,9 +199,9 @@ Review and test
 program
   .command('start')
   .description('Start full AgentMux environment with 4 panes')
-  .option('--kimi', 'Enable kimi agent', true)
-  .option('--minimax', 'Enable minimax agent', true)
-  .option('--claude', 'Enable claude agent', true)
+  .option('--nui', 'Enable nui agent', true)
+  .option('--sam', 'Enable sam agent', true)
+  .option('--wit', 'Enable wit agent', true)
   .action((options: any) => {
     // Check all dependencies first
     const hasTmux = checkTmux();
@@ -236,58 +238,62 @@ program
     execSync(`tmux new-session -d -s ${session} -n agentmux`);
     execSync(`tmux set -t ${session} mouse on`);
 
-    // Split horizontally - creates right pane (kimi - top right)
-    console.log(chalk.gray('Creating kimi pane...'));
+    // Split horizontally - creates right pane (nui - top right)
+    console.log(chalk.gray('Creating nui pane...'));
     execSync(`tmux split-window -h -t ${session}`);
 
-    // Go back to left pane and split vertically - creates bottom left (minimax)
-    console.log(chalk.gray('Creating minimax pane...'));
+    // Go back to left pane and split vertically - creates bottom left (sam)
+    console.log(chalk.gray('Creating sam pane...'));
     execSync(`tmux select-pane -t ${session}:0.0`);
     execSync(`tmux split-window -v -t ${session}`);
 
-    // Go to right pane and split vertically - creates bottom right (claude)
-    console.log(chalk.gray('Creating claude pane...'));
+    // Go to right pane and split vertically - creates bottom right (wit)
+    console.log(chalk.gray('Creating wit pane...'));
     execSync(`tmux select-pane -t ${session}:0.1`);
     execSync(`tmux split-window -v -t ${session}`);
 
     // Layout:
     // Pane 0 (top-left): Status
-    // Pane 1 (top-right): KIMI
-    // Pane 2 (bottom-left): MINIMAX
-    // Pane 3 (bottom-right): CLAUDE
+    // Pane 1 (top-right): NUI
+    // Pane 2 (bottom-left): SAM
+    // Pane 3 (bottom-right): WIT
 
     // Start agents in their panes
 
     // Pane 0: Status monitor (live updating)
     console.log(chalk.gray('Setting up status pane...'));
     execSync(`tmux select-pane -t ${session}:0.0`);
+    execSync(`tmux select-pane -t ${session}:0.0 -T "status"`);
     execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
 
-    // Pane 1: KIMI (top-right)
-    if (options.kimi) {
-      console.log(chalk.gray('Starting kimi...'));
+    // Pane 1: NUI (top-right)
+    if (options.nui) {
+      console.log(chalk.gray('Starting nui...'));
       execSync(`tmux select-pane -t ${session}:0.1`);
+      execSync(`tmux select-pane -t ${session}:0.1 -T "nui (opencode)"`);
       execSync(`tmux send-keys -t ${session}:0.1 "clear" C-m`);
-      const kimiCmd = `AGENTMUX_AGENT=kimi AGENTMUX_PROJECT=${currentDir} opencode`;
-      execSync(`tmux send-keys -t ${session}:0.1 "${kimiCmd}" C-m`);
+      const nuiCmd = `AGENTMUX_AGENT=nui AGENTMUX_PROJECT=${currentDir} opencode`;
+      execSync(`tmux send-keys -t ${session}:0.1 "${nuiCmd}" C-m`);
     }
 
-    // Pane 2: MINIMAX (bottom-left)
-    if (options.minimax) {
-      console.log(chalk.gray('Starting minimax...'));
+    // Pane 2: SAM (bottom-left)
+    if (options.sam) {
+      console.log(chalk.gray('Starting sam...'));
       execSync(`tmux select-pane -t ${session}:0.2`);
+      execSync(`tmux select-pane -t ${session}:0.2 -T "sam (opencode)"`);
       execSync(`tmux send-keys -t ${session}:0.2 "clear" C-m`);
-      const minimaxCmd = `AGENTMUX_AGENT=minimax AGENTMUX_PROJECT=${currentDir} opencode`;
-      execSync(`tmux send-keys -t ${session}:0.2 "${minimaxCmd}" C-m`);
+      const samCmd = `AGENTMUX_AGENT=sam AGENTMUX_PROJECT=${currentDir} opencode`;
+      execSync(`tmux send-keys -t ${session}:0.2 "${samCmd}" C-m`);
     }
 
-    // Pane 3: CLAUDE (bottom-right)
-    if (options.claude) {
-      console.log(chalk.gray('Starting claude...'));
+    // Pane 3: WIT (bottom-right)
+    if (options.wit) {
+      console.log(chalk.gray('Starting wit...'));
       execSync(`tmux select-pane -t ${session}:0.3`);
+      execSync(`tmux select-pane -t ${session}:0.3 -T "wit (claude)"`);
       execSync(`tmux send-keys -t ${session}:0.3 "clear" C-m`);
-      const claudeCmd = `AGENTMUX_AGENT=claude AGENTMUX_PROJECT=${currentDir} claude`;
-      execSync(`tmux send-keys -t ${session}:0.3 "${claudeCmd}" C-m`);
+      const witCmd = `AGENTMUX_AGENT=wit AGENTMUX_PROJECT=${currentDir} claude`;
+      execSync(`tmux send-keys -t ${session}:0.3 "${witCmd}" C-m`);
     }
 
     // Equalize pane sizes
@@ -295,13 +301,13 @@ program
 
     console.log(chalk.green('\n✅ AgentMux environment ready!'));
     console.log(chalk.yellow('\n🖥️  Split Screen Layout:'));
-    console.log(chalk.white('   ┌───────────────┬───────────────┐'));
-    console.log(chalk.white('   │    STATUS     │     KIMI      │'));
-    console.log(chalk.white('   │   (top-left)  │  (top-right)  │'));
-    console.log(chalk.white('   ├───────────────┼───────────────┤'));
-    console.log(chalk.white('   │    MINIMAX    │    CLAUDE     │'));
-    console.log(chalk.white('   │ (bottom-left) │ (bottom-right)│'));
-    console.log(chalk.white('   └───────────────┴───────────────┘'));
+    console.log(chalk.white('   ┌─────────────────────┬─────────────────────┐'));
+    console.log(chalk.white('   │       STATUS        │   nui (opencode)    │'));
+    console.log(chalk.white('   │     (top-left)      │    (top-right)      │'));
+    console.log(chalk.white('   ├─────────────────────┼─────────────────────┤'));
+    console.log(chalk.white('   │   sam (opencode)    │    wit (claude)     │'));
+    console.log(chalk.white('   │   (bottom-left)     │   (bottom-right)    │'));
+    console.log(chalk.white('   └─────────────────────┴─────────────────────┘'));
 
     console.log(chalk.blue('\n🔗 Attaching now...'));
     console.log(chalk.yellow('   🖱️  MOUSE ENABLED: Click to switch panes!'));
@@ -338,13 +344,17 @@ program
       const secondsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
       process.stdout.write(`${chalk.gray(`⏱️  Last update: ${secondsSinceUpdate}s ago`)}\n\n`);
 
-      // Show JJ changes
+    // Show JJ changes
       console.log(chalk.yellow('JJ Changes:'));
       if (checkJJ()) {
         try {
           const jjDir = path.join(agentMuxDir, '.jj');
           if (fs.existsSync(jjDir)) {
-            const log = exec('jj log --no-graph --template "change_id.short() ++ \\" \\" ++ description\\n" 2>/dev/null || echo "  No changes yet"');
+            // Run jj from the project root (parent of .agentmux/)
+            const projectRoot = path.dirname(agentMuxDir);
+            const log = exec('jj log --no-graph --template "change_id.short() ++ \" \" ++ description\\n" 2>/dev/null || echo "  No changes yet"', {
+              cwd: projectRoot
+            });
             if (log && log.trim()) {
               console.log(log);
             } else {
@@ -366,7 +376,7 @@ program
         const session = getSessionName();
         const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
         if (output) {
-          const panes = ['Status', 'Kimi', 'Minimax', 'Claude'];
+          const panes = ['Status', 'nui (opencode)', 'sam (opencode)', 'wit (claude)'];
           output.trim().split('\n').forEach((line, idx) => {
             const paneName = panes[idx] || `Pane ${idx}`;
             const cmd = line.split(':')[1]?.trim() || 'idle';
@@ -406,27 +416,21 @@ program
     // Initial render
     renderStatus();
 
-    // Set up polling for JJ changes
+    // Set up polling for JJ changes every 3 seconds
     const pollInterval = setInterval(() => {
       const currentState = getJJStateHash(agentMuxDir);
 
       if (currentState !== lastState) {
         lastState = currentState;
         lastUpdateTime = Date.now();
-        renderStatus();
       }
+      // Always re-render to update the idle counter
+      renderStatus();
     }, 3000);
-
-    // Update idle indicator every second
-    const idleInterval = setInterval(() => {
-      // Only update the idle line to avoid full re-render flicker
-      process.stdout.write(`\x1b[2A\r${chalk.gray(`⏱️  Last update: ${Math.floor((Date.now() - lastUpdateTime) / 1000)}s ago`)}\x1b[2B`);
-    }, 1000);
 
     // Handle exit gracefully
     process.on('SIGINT', () => {
       clearInterval(pollInterval);
-      clearInterval(idleInterval);
       console.log(chalk.gray('\n\n👋 Status monitor stopped\n'));
       process.exit(0);
     });
@@ -445,15 +449,17 @@ program
     const msg = message.join(' ');
     const from = process.env.AGENTMUX_AGENT || 'user';
 
-    const fullMsg = `echo "📨 [@${from} → @${to}]: ${msg}"`;
+    // Escape quotes in message to prevent breaking tmux command
+    const escapedMsg = msg.replace(/"/g, '\\"').replace(/'/g, "\\'");
+    const fullMsg = `echo "📨 [@${from} → @${to}]: ${escapedMsg}"`;
 
     try {
       // Map agent names to pane numbers
       const paneMap: {[key: string]: number} = {
         'status': 0,
-        'kimi': 1,
-        'minimax': 2,
-        'claude': 3
+        'nui': 1,
+        'sam': 2,
+        'wit': 3
       };
       const paneNum = paneMap[to.toLowerCase()];
 
@@ -461,7 +467,7 @@ program
         execSync(`tmux send-keys -t ${session}:0.${paneNum} "${fullMsg}" C-m`);
         console.log(chalk.green(`✅ Message sent to ${to}`));
       } else {
-        console.log(chalk.red(`❌ Unknown agent: ${to}. Try: status, kimi, minimax, claude`));
+        console.log(chalk.red(`❌ Unknown agent: ${to}. Try: status, nui, sam, wit`));
       }
     } catch (e) {
       console.log(chalk.red(`❌ Failed to send to ${to}. Is the session running?`));
