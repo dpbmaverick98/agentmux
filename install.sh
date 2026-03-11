@@ -125,33 +125,13 @@ fi
 echo ""
 echo "📦 Installing AgentMux..."
 
-# Check if we're already in the agentmux repo
-if [[ -f "$(pwd)/package.json" ]] && grep -q "agentmux" "$(pwd)/package.json" 2>/dev/null; then
-    echo "  → Building from current directory..."
-    AGENTMUX_DIR="$(pwd)"
-else
-    # Clone agentmux repo
-    AGENTMUX_DIR="$HOME/.agentmux-repo"
-    if [[ -d "$AGENTMUX_DIR" ]]; then
-        echo "  → Updating existing AgentMux repo..."
-        cd "$AGENTMUX_DIR"
-        git pull
-    else
-        echo "  → Cloning AgentMux repo..."
-        git clone https://github.com/dpbmaverick98/agentmux.git "$AGENTMUX_DIR"
-        cd "$AGENTMUX_DIR"
-    fi
-fi
-
-# Build agentmux
-echo "  → Building AgentMux..."
-bun install
-bun run build
-
-# Create symlink in ~/.local/bin
+# Download pre-built AgentMux directly from GitHub
+echo "  → Downloading AgentMux..."
 mkdir -p "$HOME/.local/bin"
-ln -sf "$AGENTMUX_DIR/dist/index.js" "$HOME/.local/bin/agentmux"
+curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/dist/index.js" \
+  -o "$HOME/.local/bin/agentmux"
 chmod +x "$HOME/.local/bin/agentmux"
+echo "  ✓ AgentMux downloaded to ~/.local/bin/agentmux"
 
 # Add to PATH if not already there
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
