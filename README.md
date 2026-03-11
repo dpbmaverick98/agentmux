@@ -1,152 +1,196 @@
-# AgentMux v3 - Ultra Lean
+# AgentMux v3
 
-Ultra-lean multi-agent terminal multiplexer using tmux and JJ.
+Ultra-lean multi-agent terminal multiplexer using tmux and JJ version control.
 
-## Philosophy
-
-- **tmux IS the infrastructure** - No custom TUI
-- **JJ for version control** - Agents commit naturally
-- **Visible communication** - tmux send-keys for cross-agent messaging
-- **Single install** - One binary, minimal dependencies
-
-## Install
+## One-Line Install
 
 ```bash
-# Install dependencies first
-brew install tmux
-cargo install jj-cli
-
-# Install agentmux
-bun install  # or npm install
-bun run build
-
-# Or use directly
-bun run ./src/index.ts
+curl -fsSL https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/install.sh | bash
 ```
+
+This installs: claude, opencode, jj, tmux, bun, and agentmux itself.
 
 ## Quick Start
 
 ```bash
-# 1. Initialize project
-agentmux init myproject
+# 1. Initialize project (creates .agentmux/ directory)
+agentmux init
 
-# 2. Start tmux session
-agentmux tmux-start
+# 2. Start the 4-pane environment
+agentmux start
 
-# 3. Spawn your first agent
-agentmux spawn kimi "Design auth API"
-
-# 4. Spawn another agent
-agentmux spawn minimax "Implement auth based on @kimi's design"
-
-# 5. Check status
-agentmux status
-```
-
-## Commands
-
-### `agentmux init <name>`
-Initialize a new AgentMux project with JJ repo and shared context.
-
-### `agentmux tmux-start`
-Start the tmux session. Attach with: `tmux attach -t agentmux`
-
-### `agentmux spawn <agent> [task...]`
-Spawn an AI agent in a new tmux window.
-- `agentmux spawn kimi "Implement auth"`
-- `agentmux spawn claude "Review the code"`
-- `agentmux spawn minimax "Fix bugs" --provider minimax`
-
-### `agentmux send <to> <message...>`
-Send a visible message to another agent's terminal.
-```bash
-agentmux send minimax "Check my auth.py changes"
-# minimax sees: "📨 [@kimi → @minimax]: Check my auth.py changes"
-```
-
-### `agentmux status`
-Show JJ changes, active agents, and recent messages.
-
-### `agentmux run <plan.md>`
-Execute a multi-agent plan from markdown.
-
-## Plan Format
-
-Create `plan.md`:
-```markdown
-# Auth Implementation
-
-## @kimi
-Design the auth API interface
-- Create auth.py with clear methods
-- Document expected inputs/outputs
-
-## @minimax
-Implement the auth logic
-- Use @kimi's design
-- Add password hashing with bcrypt
-
-## @claude
-Review for security
-- Check @minimax's implementation
-- Look for vulnerabilities
-```
-
-Run it:
-```bash
-agentmux run plan.md
-# Spawns all 3 agents with their tasks
+# 3. Done! You now have 3 AI agents running:
+#    - nui (opencode) - top-right
+#    - sam (opencode) - bottom-left
+#    - wit (claude) - bottom-right
+#    - status monitor - top-left
 ```
 
 ## Architecture
 
 ```
-Your Terminal
-└── tmux session "agentmux"
-    ├── window: opencode (kimi)
-    ├── window: opencode (minimax)
-    ├── window: claude (opus)
-    └── window: [you run commands here]
-        
-JJ Repo (agents commit naturally via skill)
-Shared Context (~/.agentmux/shared/)
+┌─────────────────────┬─────────────────────┐
+│    📊 STATUS        │  🤖 nui (opencode)  │
+│   (live JJ log)     │    Agent #1         │
+├─────────────────────┼─────────────────────┤
+│  🤖 sam (opencode)  │  🤖 wit (claude)    │
+│    Agent #2         │    Agent #3         │
+└─────────────────────┴─────────────────────┘
 ```
 
-## Communication
+- **4-pane split screen** using tmux
+- **Live status** shows JJ changes every 3 seconds
+- **Cross-agent messaging** via `agentmux send`
+- **JJ version control** in `.agentmux/.jj/`
 
-**Cross-agent messaging uses tmux send-keys:**
-- Visible in recipient's terminal
-- Literally types the message
-- No complex IPC needed
+## Commands
 
-**JJ for work tracking:**
-- Each agent creates changes
-- Descriptive commit messages
-- Natural code review workflow
+### Core Commands
 
-## Skill Auto-Injection
+| Command | Description |
+|---------|-------------|
+| `agentmux init` | Initialize .agentmux/ directory with JJ repo |
+| `agentmux start` | Launch 4-pane tmux session with all agents |
+| `agentmux stop` | Kill the tmux session |
+| `agentmux list` | Show all agents with status and harness |
+| `agentmux status` | Show live-updating status (JJ changes, agents, messages) |
 
-When you spawn an agent, agentmux:
-1. Sets environment variables
-2. Provides skill via `~/.agentmux/skills/agentmux.md`
-3. Agent can run `am help` to see commands
-4. Skill teaches: JJ workflow, messaging, status checking
+### Messaging Commands
 
-## Why This Design?
+| Command | Description |
+|---------|-------------|
+| `agentmux send nui "message"` | Send message to nui (appears in their terminal) |
+| `agentmux send sam "message"` | Send message to sam |
+| `agentmux send wit "message"` | Send message to wit |
 
-- **No custom TUI** - tmux handles everything visual
-- **No heavy coordinator** - tmux manages windows
-- **Familiar tools** - opencode, claude, jj, tmux
-- **Visible communication** - You see messages appear in real-time
-- **Flexible** - Agents use JJ however they want
-- **Simple** - ~300 lines of TypeScript
+**Example:**
+```bash
+# From any agent terminal:
+agentmux send sam "Can you review my changes?"
+
+# Sam sees in their terminal:
+# 📨 [@nui → @sam]: Can you review my changes?
+```
+
+### JJ Workflow
+
+```bash
+# Create a change (agents do this automatically via skill)
+jj new -m "@nui: designed auth API"
+
+# See changes
+jj log                    # Show commit history
+jj diff                   # Show current changes
+jj status                 # Show repository status
+
+# Update a change
+jj describe -m "@nui: fixed bug in auth flow"
+```
+
+## The Three Agents
+
+| Agent | Harness | Position | Role |
+|-------|---------|----------|------|
+| **nui** | opencode | Top-right | Agent #1 |
+| **sam** | opencode | Bottom-left | Agent #2 |
+| **wit** | claude | Bottom-right | Agent #3 |
+
+Each agent:
+- Has their own environment variables (`AGENTMUX_AGENT=nui`)
+- Can message other agents via `agentmux send`
+- Commits to JJ with descriptive messages
+- Can see the live status in the top-left pane
+
+## Cross-Agent Communication
+
+### From Agent Terminal
+
+```bash
+# Request help
+agentmux send sam "I need help with the database schema"
+
+# Share progress
+agentmux send wit "Auth module is complete, ready for review"
+
+# Broadcast to team
+agentmux send nui "Team sync in 5 minutes"
+```
+
+### What Recipients See
+
+Messages appear directly in the agent's terminal:
+```
+📨 [@nui → @sam]: Can you review my changes?
+```
+
+## Project Structure
+
+```
+project/
+├── .agentmux/
+│   ├── .jj/              # JJ version control
+│   ├── config.toml       # Project config
+│   ├── skills/
+│   │   └── agentmux.md   # Agent instructions
+│   └── shared/
+│       ├── plan.md       # Project plan
+│       └── messages.txt  # Message log
+└── [your project files]
+```
+
+## Agent Skill
+
+Each agent automatically receives a skill file at `.agentmux/skills/agentmux.md` that teaches them:
+
+- Available commands (`agentmux list`, `agentmux send`, etc.)
+- JJ workflow (`jj new`, `jj log`, `jj describe`)
+- How to message other agents
+- Environment variables available
+- Tips for collaboration
+
+## Keyboard Shortcuts
+
+When in the tmux session:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+B ↑↓←→` | Move between panes |
+| `Ctrl+B z` | Zoom current pane (toggle) |
+| `Ctrl+B d` | Detach (session keeps running) |
+| `Ctrl+B [` | Scroll mode (press `q` to exit) |
+| `Click` | Mouse also works to switch panes |
 
 ## Requirements
 
-- tmux
-- jj (optional but recommended)
-- opencode or claude (for AI agents)
-- Bun or Node.js
+- **macOS or Linux**
+- **tmux** - Terminal multiplexer
+- **jj** - JJ version control (Jujutsu)
+- **bun** - JavaScript runtime
+- **claude** - Anthropic's CLI
+- **opencode** - Opencode CLI
+
+All installed automatically by the one-liner installer.
+
+## Philosophy
+
+- **tmux IS the infrastructure** - No custom TUI needed
+- **JJ for version control** - Agents commit naturally with descriptive messages
+- **Visible communication** - tmux send-keys shows messages in real-time
+- **Simple** - ~300 lines of TypeScript, minimal magic
+
+## Troubleshooting
+
+### "not a terminal" error
+The installer detects non-interactive mode and skips auto-attach. Run `agentmux start` manually after install.
+
+### Messages not appearing
+Make sure the tmux session is running: `tmux attach -t agentmux`
+
+### JJ changes not showing
+The status pane refreshes every 3 seconds. Make sure you're committing with `jj new` or `jj describe`.
+
+### Agent not responding
+Check if the agent is running: `agentmux list`
 
 ## License
 
