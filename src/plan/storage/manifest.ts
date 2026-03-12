@@ -66,7 +66,7 @@ export function addVersion(
   const hash = generateHash(content);
   
   const entry: ManifestEntry = {
-    version: `v${versionNum}`,
+    version: `${versionNum}`,
     hash,
     parent: latest ? latest.version : null,
     message,

@@ -1,48 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-
-let cachedAgentMuxDir: string | null = null;
-
-function findAgentMuxDir(startDir: string = process.cwd()): string | null {
-  let currentDir = startDir;
-  const root = "/";
-  
-  while (currentDir !== root) {
-    const candidate = join(currentDir, ".agentmux");
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-    currentDir = dirname(currentDir);
-  }
-  
-  return null;
-}
-
-function getAgentMuxDir(): string {
-  if (cachedAgentMuxDir) {
-    return cachedAgentMuxDir;
-  }
-  
-  const found = findAgentMuxDir();
-  if (found) {
-    cachedAgentMuxDir = found;
-    return found;
-  }
-  
-  const cwd = process.cwd();
-  const defaultDir = join(cwd, ".agentmux");
-  cachedAgentMuxDir = defaultDir;
-  return defaultDir;
-}
-
-export function findAndSetPlanDir(startDir?: string): string {
-  const found = findAgentMuxDir(startDir);
-  if (found) {
-    cachedAgentMuxDir = found;
-    return found;
-  }
-  throw new Error("No .agentmux/ directory found. Run 'am memory init' first.");
-}
+import { join } from "node:path";
+import { getAgentMuxDir, findAndSetAgentMuxDir } from "../../lib/paths.ts";
 
 const AGENTMUX_DIR = getAgentMuxDir();
 const PLANS_DIR = join(AGENTMUX_DIR, "plans");
@@ -83,3 +41,5 @@ export function ensurePlanDir(name: string): void {
 export function getAgentName(): string {
   return process.env.AGENTMUX_AGENT || "unknown";
 }
+
+export { findAndSetAgentMuxDir };

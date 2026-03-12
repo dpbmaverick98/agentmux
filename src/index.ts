@@ -4,6 +4,9 @@ import chalk from 'chalk';
 import { spawn, execFileSync, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import type { ExpertiseRecord, RecordType, Classification } from './memory/schema/types.ts';
+import { getAgentMuxDir as getSharedAgentMuxDir } from './lib/paths.ts';
+import { formatRecord as sharedFormatRecord } from './lib/format.ts';
 
 const program = new Command();
 
@@ -32,10 +35,8 @@ const AGENT_PANE_MAP: { [key: string]: number } = Object.fromEntries(
   AGENTS.filter(a => a.name !== 'status').map(a => [a.name, a.pane])
 );
 
-// Get local .agentmux directory for current project
-function getAgentMuxDir(): string {
-  return path.join(process.cwd(), '.agentmux');
-}
+// Get local .agentmux directory for current project (uses shared tree-walking lookup)
+const getAgentMuxDir = getSharedAgentMuxDir;
 
 // Execute command and return output (legacy wrapper for simple commands)
 function exec(cmd: string, options: any = {}): string {
@@ -462,8 +463,8 @@ program
         if (matched.length > 0) {
           contextInjection = "\n\n" + matched.map(formatMemoryForInjection).join("\n");
         }
-      } catch {
-        // Silently skip context injection if it fails
+      } catch (e) {
+        console.error(chalk.yellow(`Warning: context injection failed: ${e instanceof Error ? e.message : e}`));
       }
     }
 
@@ -1081,7 +1082,6 @@ memoryProgram
   .action(async (domain: string, content: string | undefined, options: any) => {
     const { ensureExpertiseDir, getExpertisePath, readConfig, addDomain } = await import('./memory/storage/config.ts');
     const { appendRecord, findDuplicate, readExpertiseFile } = await import('./memory/storage/store.ts');
-    const { ExpertiseRecord, RecordType, Classification } = await import('./memory/schema/types.ts');
     
     await ensureExpertiseDir();
     const config = await readConfig();
@@ -1226,17 +1226,6 @@ memoryProgram
       return;
     }
 
-    function formatRecord(r: ExpertiseRecord): string {
-      switch (r.type) {
-        case 'convention':
-          return `- ${r.content}`;
-        case 'failure':
-          return `- ${r.description}\n  → ${r.resolution}`;
-        case 'decision':
-          return `- **${r.title}**: ${r.rationale}`;
-      }
-    }
-
     function filterByPlan(records: ExpertiseRecord[], planRef: string): ExpertiseRecord[] {
       return records.filter(r => r.plan_refs && r.plan_refs.some(ref => ref.includes(planRef)));
     }
@@ -1270,15 +1259,15 @@ memoryProgram
 
         if (byType.convention.length > 0) {
           console.log('\n### Conventions');
-          for (const r of byType.convention) console.log(formatRecord(r));
+          for (const r of byType.convention) console.log(sharedFormatRecord(r));
         }
         if (byType.failure.length > 0) {
           console.log('\n### Known Failures');
-          for (const r of byType.failure) console.log(formatRecord(r));
+          for (const r of byType.failure) console.log(sharedFormatRecord(r));
         }
         if (byType.decision.length > 0) {
           console.log('\n### Decisions');
-          for (const r of byType.decision) console.log(formatRecord(r));
+          for (const r of byType.decision) console.log(sharedFormatRecord(r));
         }
       }
     }
@@ -1293,7 +1282,7 @@ memoryProgram
   .description('Generate agent-optimized context for injection')
   .action(async (domainsArg: string[] | undefined, options: any) => {
     const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
-    const { readExpertiseFile, getFileModTime } = await import('./memory/storage/store.ts');
+    const { readExpertiseFile } = await import('./memory/storage/store.ts');
 
     const config = await readConfig();
     const excluded = options.exclude || [];
@@ -1312,7 +1301,6 @@ memoryProgram
     for (const domain of targetDomains) {
       const filePath = getExpertisePath(domain);
       const records = await readExpertiseFile(filePath);
-      const lastUpdated = await getFileModTime(filePath);
 
       if (records.length === 0) continue;
 
@@ -1328,32 +1316,8 @@ memoryProgram
         byType[r.type].push(r);
       }
 
-      const formatCompact = (r: ExpertiseRecord): string => {
-        switch (r.type) {
-          case 'convention':
-            return `[convention] ${r.content}`;
-          case 'failure':
-            return `[failure] ${r.description} → ${r.resolution}`;
-          case 'decision':
-            return `[decision] ${r.title}: ${r.rationale}`;
-        }
-      };
-
-      const formatFull = (r: ExpertiseRecord): string => {
-        const meta = options.full 
-          ? ` (${r.classification}, ${r.recorded_by}, ${new Date(r.recorded_at).toLocaleDateString()})`
-          : '';
-        switch (r.type) {
-          case 'convention':
-            return `- ${r.content}${meta}`;
-          case 'failure':
-            return `- ${r.description}${meta}\n  → ${r.resolution}`;
-          case 'decision':
-            return `- **${r.title}**: ${r.rationale}${meta}`;
-        }
-      };
-
-      const formatter = options.full ? formatFull : formatCompact;
+      const style = options.full ? 'full' as const : 'compact' as const;
+      const formatter = (r: ExpertiseRecord) => sharedFormatRecord(r, style);
 
       if (byType.convention.length > 0) {
         lines.push('\n### Conventions');
@@ -1512,7 +1476,7 @@ planProgram
   .description('Show ASCII timeline of plan evolution')
   .action(async (name: string | undefined) => {
     const { timelinePlan } = await import('./plan/commands/timeline.ts');
-    await timelinePlan(name);
+    timelinePlan(name);
   });
 
 program.addCommand(planProgram);

@@ -1,48 +1,7 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-
-let cachedAgentMuxDir: string | null = null;
-
-function findAgentMuxDir(startDir: string = process.cwd()): string | null {
-  let currentDir = startDir;
-  const root = "/";
-  
-  while (currentDir !== root) {
-    const candidate = join(currentDir, ".agentmux");
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-    currentDir = dirname(currentDir);
-  }
-  
-  return null;
-}
-
-function getAgentMuxDir(): string {
-  if (cachedAgentMuxDir) {
-    return cachedAgentMuxDir;
-  }
-  
-  const found = findAgentMuxDir();
-  if (found) {
-    cachedAgentMuxDir = found;
-    return found;
-  }
-  
-  const cwd = process.cwd();
-  const defaultDir = join(cwd, ".agentmux");
-  cachedAgentMuxDir = defaultDir;
-  return defaultDir;
-}
-
-export function findAndSetAgentMuxDir(startDir?: string): string {
-  const found = findAgentMuxDir(startDir);
-  if (found) {
-    cachedAgentMuxDir = found;
-    return found;
-  }
-  throw new Error("No .agentmux/ directory found. Run 'am memory init' first.");
-}
+import { existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { getAgentMuxDir } from "../../lib/paths.ts";
 
 const AGENTMUX_DIR = getAgentMuxDir();
 const EXPERTISE_DIR = join(AGENTMUX_DIR, "expertise");
@@ -100,7 +59,7 @@ export async function ensureExpertiseDir(): Promise<void> {
 export async function readConfig(): Promise<MemoryConfig> {
   await ensureExpertiseDir();
   try {
-    const content = readFileSync(CONFIG_PATH, "utf-8");
+    const content = await readFile(CONFIG_PATH, "utf-8");
     return JSON.parse(content) as MemoryConfig;
   } catch {
     return DEFAULT_CONFIG;
@@ -109,7 +68,7 @@ export async function readConfig(): Promise<MemoryConfig> {
 
 export async function writeConfig(config: MemoryConfig): Promise<void> {
   await ensureExpertiseDir();
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
 }
 
 export async function addDomain(domain: string): Promise<void> {

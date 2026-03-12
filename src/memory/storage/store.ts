@@ -51,7 +51,11 @@ export async function readExpertiseFile(
   const records: ExpertiseRecord[] = [];
   const lines = content.split("\n").filter((line) => line.trim().length > 0);
   for (const line of lines) {
-    records.push(JSON.parse(line) as ExpertiseRecord);
+    try {
+      records.push(JSON.parse(line) as ExpertiseRecord);
+    } catch {
+      // Skip corrupted line, continue reading
+    }
   }
   return records;
 }
@@ -172,10 +176,6 @@ export function findDuplicate(
     }
   }
   return null;
-}
-
-export function countRecords(records: ExpertiseRecord[]): number {
-  return records.length;
 }
 
 export function findRecordById(

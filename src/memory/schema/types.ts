@@ -8,7 +8,7 @@ export interface Evidence {
 }
 
 export interface BaseRecord {
-  id: string;
+  id?: string;
   type: RecordType;
   recorded_at: string;
   recorded_by: string;
@@ -37,9 +37,3 @@ export interface DecisionRecord extends BaseRecord {
 }
 
 export type ExpertiseRecord = ConventionRecord | FailureRecord | DecisionRecord;
-
-export const RECORD_TYPE_REQUIREMENTS: Record<string, string> = {
-  convention: "convention records require: content",
-  failure: "failure records require: description, resolution",
-  decision: "decision records require: title, rationale",
-};

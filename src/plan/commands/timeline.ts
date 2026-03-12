@@ -1,18 +1,16 @@
 import chalk from "chalk";
 import { listPlans, getPlan } from "../storage/registry.ts";
 import { getVersionHistory } from "../storage/manifest.ts";
-import { getPlanDir, getVersionPath } from "../storage/config.ts";
-import { existsSync, readFileSync } from "node:fs";
 
-export async function timelinePlan(name?: string): Promise<void> {
+export function timelinePlan(name?: string): void {
   if (name) {
-    await showPlanTimeline(name);
+    showPlanTimeline(name);
   } else {
-    await showAllPlansTimeline();
+    showAllPlansTimeline();
   }
 }
 
-async function showPlanTimeline(name: string): Promise<void> {
+function showPlanTimeline(name: string): void {
   const plan = getPlan(name);
   if (!plan) {
     console.log(chalk.red(`Plan '${name}' not found`));
@@ -62,7 +60,7 @@ async function showPlanTimeline(name: string): Promise<void> {
   console.log(chalk.gray("Legend: ● = current, ○ = historical, ↑ = parent version"));
 }
 
-async function showAllPlansTimeline(): Promise<void> {
+function showAllPlansTimeline(): void {
   const plans = listPlans();
   
   if (plans.length === 0) {
