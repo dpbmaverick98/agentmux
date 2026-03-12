@@ -80,3 +80,50 @@ am memory record project --type convention "Always use X for Y"
 am memory record tasks --type failure --description "Problem" --resolution "Solution"
 am memory record decisions --type decision --title "Choice" --rationale "Reason"
 ```
+
+## Plan Versioning
+
+Create and manage versioned plans for multi-agent collaboration:
+
+```bash
+# Create a new plan (auto-prefixed with agent name: @nui/plan-name)
+am plan init api-design
+
+# Edit draft.md, then commit as a version
+am plan commit api-design -m "v1: REST approach"
+
+# View version history
+am plan log api-design
+
+# Show current version
+am plan show api-design
+
+# List all plans
+am plan list
+```
+
+### Linking Plans to Memory
+
+Connect decisions in plans to memory records (bidirectional):
+
+```bash
+# Link a memory record to current plan version
+am plan link api-design --memory am-8f2d
+
+# Show plan with linked memory content
+am plan show api-design --with-memory
+
+# Query memory filtered by plan
+am memory query --all --plan api-design
+```
+
+**Storage structure:**
+```
+.agentmux/plans/
+├── index.jsonl              # Plan registry
+└── @nui/api-design/
+    ├── manifest.jsonl       # Version history with parent refs
+    ├── v1-abc123.md        # Version files
+    ├── v2-def456.md
+    └── current.md -> v2    # Symlink to latest
+```
