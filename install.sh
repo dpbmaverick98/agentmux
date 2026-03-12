@@ -36,44 +36,6 @@ check_installed() {
     command -v "$1" &> /dev/null
 }
 
-# Install jj
-if check_installed jj; then
-    echo "  ✓ jj already installed"
-else
-    echo "  → Installing jj..."
-    if [[ "$PKG_MANAGER" == "brew" ]]; then
-        brew install jj
-    else
-        # Download pre-compiled binary from GitHub releases
-        echo "    Downloading pre-compiled binary..."
-        JJ_VERSION="0.39.0"
-        JJ_ARCH="$(uname -m)"
-        
-        # Map architecture names (jj uses musl for Linux)
-        case "$JJ_ARCH" in
-            x86_64)
-                JJ_ARCH="x86_64-unknown-linux-musl"
-                ;;
-            aarch64|arm64)
-                JJ_ARCH="aarch64-unknown-linux-musl"
-                ;;
-            *)
-                echo "❌ Unsupported architecture: $JJ_ARCH"
-                echo "   Please install jj manually: https://github.com/jj-vcs/jj"
-                exit 1
-                ;;
-        esac
-        
-        JJ_URL="https://github.com/jj-vcs/jj/releases/download/v${JJ_VERSION}/jj-v${JJ_VERSION}-${JJ_ARCH}.tar.gz"
-        
-        # Download and extract
-        curl -fsSL "$JJ_URL" | tar -xz -C /tmp
-        sudo mv "/tmp/jj" /usr/local/bin/jj
-        sudo chmod +x /usr/local/bin/jj
-        echo "    ✓ jj installed to /usr/local/bin/jj"
-    fi
-fi
-
 # Install tmux
 if check_installed tmux; then
     echo "  ✓ tmux already installed"
@@ -148,18 +110,12 @@ echo ""
 
 # Install skills globally for Claude
 mkdir -p "$HOME/.claude/skills/agentmux"
-mkdir -p "$HOME/.claude/skills/jj-workflow"
 
 # Download skill files from GitHub
 echo "  → Downloading agentmux skill..."
 curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/agentmux/SKILL.md" \
   > "$HOME/.claude/skills/agentmux/SKILL.md"
 echo "  ✓ agentmux skill installed"
-
-echo "  → Downloading jj-workflow skill..."
-curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/jj-workflow/SKILL.md" \
-  > "$HOME/.claude/skills/jj-workflow/SKILL.md"
-echo "  ✓ jj-workflow skill installed"
 
 echo ""
 echo "✅ AgentMux installed successfully!"

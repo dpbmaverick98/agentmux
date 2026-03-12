@@ -2,7 +2,7 @@
 
 ## Overview
 
-AgentMux is a multi-agent terminal multiplexer using tmux with JJ version control.
+AgentMux is a multi-agent terminal multiplexer using tmux with commit tracking.
 
 ## Documentation
 

@@ -19,14 +19,14 @@ The CLI is invocable as `agentmux` or `am` when installed globally.
 
 ## Architecture
 
-AgentMux is a multi-agent terminal multiplexer — a single-file CLI (`src/index.ts`, ~800 lines) that orchestrates multiple AI coding agents in a tmux session with JJ version control for collaboration.
+AgentMux is a multi-agent terminal multiplexer — a single-file CLI (`src/index.ts`, ~800 lines) that orchestrates multiple AI coding agents in a tmux session with commit tracking for collaboration.
 
 **Stack**: TypeScript, Bun runtime, Commander.js (CLI), chalk (colors). No test suite.
 
 **Key design choices**:
 - Single-file architecture: all logic lives in `src/index.ts`, compiled to `dist/index.js`
 - tmux is the infrastructure — no custom TUI, all pane management via `tmux` shell commands
-- JJ (Jujutsu) handles version control for multi-agent collaboration (not git)
+- Commit tracking logs work with `agentmux commit` and `agentmux review` commands
 - Cross-agent messaging uses `tmux send-keys` with printf, logging to `~/.agentmux/shared/messages.txt`
 - Enter key (C-m) must be sent separately from command text (bundling breaks execution)
 
@@ -43,9 +43,9 @@ AgentMux is a multi-agent terminal multiplexer — a single-file CLI (`src/index
 
 **Environment variables**: `AGENTMUX_SESSION`, `AGENTMUX_AGENT`, `AGENTMUX_PROJECT`
 
-**Project detection**: looks for `.agentmux/` subdirectory. JJ commands run from the parent of `.agentmux/`.
+**Project detection**: looks for `.agentmux/` subdirectory. Commands run from the parent of `.agentmux/`.
 
-**Skills** (`skills/` directory): Markdown files installed globally to `~/.claude/skills/` — they teach AI agents how to use agentmux commands and JJ workflows.
+**Skills** (`skills/` directory): Markdown files installed globally to `~/.claude/skills/` — they teach AI agents how to use agentmux commands and commit tracking workflows.
 
 ## CLI Commands
 

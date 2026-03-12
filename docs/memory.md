@@ -36,7 +36,7 @@ am memory query --all
 | Type | Required Fields | Example |
 |------|-----------------|---------|
 | `convention` | content | "Use Bun runtime for TypeScript" |
-| `failure` | description, resolution | jj conflict → Run jj log first |
+| `failure` | description, resolution | merge conflict → Check agentmux commits first |
 | `decision` | title, rationale | JSONL storage: Git-friendly |
 
 ## Options
