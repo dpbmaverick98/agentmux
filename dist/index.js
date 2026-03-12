@@ -2695,6 +2695,7 @@ var init_config2 = __esm(() => {
 
 // src/plan/storage/registry.ts
 import { existsSync as existsSync3, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { renameSync } from "node:fs";
 function getIndexPath() {
   return `${getPlansDir()}/index.jsonl`;
 }
@@ -2705,21 +2706,41 @@ function ensureIndex() {
     writeFileSync2(indexPath, "", "utf-8");
   }
 }
+function atomicWrite(path, content) {
+  const tmpPath = `${path}.tmp.${Date.now()}`;
+  writeFileSync2(tmpPath, content, "utf-8");
+  try {
+    renameSync(tmpPath, path);
+  } catch (err) {
+    try {
+      const { unlinkSync } = __require("node:fs");
+      unlinkSync(tmpPath);
+    } catch {}
+    throw err;
+  }
+}
 function readIndex() {
   ensureIndex();
   const indexPath = getIndexPath();
   const content = readFileSync2(indexPath, "utf-8");
   if (!content.trim())
     return [];
-  return content.trim().split(`
-`).map((line) => JSON.parse(line));
+  const entries = [];
+  const lines = content.trim().split(`
+`);
+  for (const line of lines) {
+    try {
+      entries.push(JSON.parse(line));
+    } catch {}
+  }
+  return entries;
 }
 function writeIndex(entries) {
   const indexPath = getIndexPath();
   const content = entries.map((e) => JSON.stringify(e)).join(`
-`);
-  writeFileSync2(indexPath, content + `
-`, "utf-8");
+`) + `
+`;
+  atomicWrite(indexPath, content);
 }
 function listPlans() {
   return readIndex();
@@ -2809,6 +2830,8 @@ var init_init = __esm(() => {
 
 // src/plan/storage/manifest.ts
 import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { symlinkSync, unlinkSync } from "node:fs";
+import { createHash as createHash2 } from "node:crypto";
 function readManifest(planName) {
   const manifestPath = getManifestPath(planName);
   if (!existsSync4(manifestPath))
@@ -2816,16 +2839,23 @@ function readManifest(planName) {
   const content = readFileSync3(manifestPath, "utf-8");
   if (!content.trim())
     return [];
-  return content.trim().split(`
-`).map((line) => JSON.parse(line));
+  const entries = [];
+  const lines = content.trim().split(`
+`);
+  for (const line of lines) {
+    try {
+      entries.push(JSON.parse(line));
+    } catch {}
+  }
+  return entries;
 }
 function writeManifest(planName, entries) {
   ensurePlanDir(planName);
   const manifestPath = getManifestPath(planName);
   const content = entries.map((e) => JSON.stringify(e)).join(`
-`);
-  writeFileSync3(manifestPath, content + `
-`, "utf-8");
+`) + `
+`;
+  atomicWrite2(manifestPath, content);
 }
 function getVersionHistory(planName) {
   return readManifest(planName);
@@ -2835,6 +2865,10 @@ function getLatestVersion(planName) {
   if (history.length === 0)
     return null;
   return history[history.length - 1];
+}
+function getVersion(planName, version) {
+  const history = readManifest(planName);
+  return history.find((e) => e.version === version) || null;
 }
 function addVersion(planName, message, content) {
   const history = readManifest(planName);
@@ -2847,6 +2881,7 @@ function addVersion(planName, message, content) {
     parent: latest ? latest.version : null,
     message,
     created_at: new Date().toISOString(),
+    created_by: getAgentName(),
     memory_refs: []
   };
   history.push(entry);
@@ -2854,20 +2889,38 @@ function addVersion(planName, message, content) {
   return entry;
 }
 function generateHash(content) {
-  let hash = 0;
-  for (let i = 0;i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
+  return createHash2("sha256").update(content).digest("hex").slice(0, 8);
+}
+function atomicWrite2(path, content) {
+  const tmpPath = `${path}.tmp.${Date.now()}`;
+  writeFileSync3(tmpPath, content, "utf-8");
+  try {
+    const { renameSync: renameSync2 } = __require("node:fs");
+    renameSync2(tmpPath, path);
+  } catch (err) {
+    try {
+      const { unlinkSync: unlinkSync2 } = __require("node:fs");
+      unlinkSync2(tmpPath);
+    } catch {}
+    throw err;
   }
-  return Math.abs(hash).toString(16).slice(0, 6);
+}
+function addMemoryRef(planName, version, memoryRef) {
+  const history = readManifest(planName);
+  const entry = history.find((e) => e.version === version);
+  if (!entry) {
+    throw new Error(`Version ${version} not found in plan ${planName}`);
+  }
+  if (!entry.memory_refs.includes(memoryRef)) {
+    entry.memory_refs.push(memoryRef);
+    writeManifest(planName, history);
+  }
 }
 function updateCurrentSymlink(planName, version, hash) {
   const planDir = getPlanDir(planName);
   const versionFile = `v${version}-${hash}.md`;
   const symlinkPath = getCurrentSymlinkPath(planName);
-  const { symlinkSync, existsSync: existsSync5, unlinkSync } = __require("node:fs");
-  if (existsSync5(symlinkPath)) {
+  if (existsSync4(symlinkPath)) {
     unlinkSync(symlinkPath);
   }
   symlinkSync(versionFile, symlinkPath);
@@ -2892,22 +2945,20 @@ async function commitPlan(name, message) {
     return;
   }
   const planDir = getPlanDir(plan.name);
-  const sharedPlanPath = `${planDir}/current.md`;
+  const draftPath = `${planDir}/draft.md`;
+  const rootPlanPath = `${process.cwd()}/plan.md`;
   let content;
   let sourcePath;
-  if (existsSync5(sharedPlanPath)) {
-    sourcePath = sharedPlanPath;
-    content = readFileSync4(sharedPlanPath, "utf-8");
+  if (existsSync5(draftPath)) {
+    sourcePath = draftPath;
+    content = readFileSync4(draftPath, "utf-8");
+  } else if (existsSync5(rootPlanPath)) {
+    sourcePath = rootPlanPath;
+    content = readFileSync4(rootPlanPath, "utf-8");
   } else {
-    const rootPlanPath = `${process.cwd()}/plan.md`;
-    if (existsSync5(rootPlanPath)) {
-      sourcePath = rootPlanPath;
-      content = readFileSync4(rootPlanPath, "utf-8");
-    } else {
-      console.log(source_default2.red("No plan content found"));
-      console.log(source_default2.gray("Create plan.md in project root or in the plan directory"));
-      return;
-    }
+    console.log(source_default2.red("No plan content found"));
+    console.log(source_default2.gray("Create draft.md in plan dir or plan.md in project root"));
+    return;
   }
   const entry = addVersion(plan.name, message, content);
   const versionPath = getVersionPath(plan.name, entry.version, entry.hash);
@@ -2944,6 +2995,7 @@ Plan: ${plan.name}
     if (entry.parent) {
       console.log(source_default2.gray(`    parent: ${entry.parent}`));
     }
+    console.log(source_default2.gray(`    by: @${entry.created_by}`));
     console.log();
   }
 }
@@ -2979,6 +3031,86 @@ ${plan.name} - ${latest.version}
   console.log(content);
 }
 var init_commit = __esm(() => {
+  init_source();
+  init_registry();
+  init_manifest();
+  init_config2();
+});
+
+// src/plan/commands/link.ts
+var exports_link = {};
+__export(exports_link, {
+  showPlanWithMemory: () => showPlanWithMemory,
+  linkMemory: () => linkMemory
+});
+import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:fs";
+async function linkMemory(planName, memoryRef, version) {
+  const plan = getPlan(planName);
+  if (!plan) {
+    console.log(source_default2.red(`Plan '${planName}' not found`));
+    return;
+  }
+  let targetVersion = version;
+  if (!targetVersion) {
+    const latest = getLatestVersion(plan.name);
+    if (!latest) {
+      console.log(source_default2.red("No versions in this plan. Commit first with: am plan commit"));
+      return;
+    }
+    targetVersion = latest.version;
+  }
+  const versionEntry = getVersion(plan.name, targetVersion);
+  if (!versionEntry) {
+    console.log(source_default2.red(`Version '${targetVersion}' not found in plan '${planName}'`));
+    return;
+  }
+  addMemoryRef(plan.name, targetVersion, memoryRef);
+  console.log(source_default2.green(`✓ Linked ${memoryRef} to ${plan.name}@${targetVersion}`));
+}
+async function showPlanWithMemory(name) {
+  const plan = getPlan(name);
+  if (!plan) {
+    console.log(source_default2.red(`Plan '${name}' not found`));
+    return;
+  }
+  const latest = getLatestVersion(plan.name);
+  if (!latest) {
+    console.log(source_default2.yellow("No versions yet. Commit with: am plan commit <name> -m <message>"));
+    return;
+  }
+  const versionPath = `${getPlanDir(plan.name)}/v${latest.version}-${latest.hash}.md`;
+  if (!existsSync6(versionPath)) {
+    console.log(source_default2.red(`Version file not found: ${versionPath}`));
+    return;
+  }
+  const content = readFileSync5(versionPath, "utf-8");
+  console.log(source_default2.bold(`
+${plan.name} - ${latest.version}
+`));
+  console.log(source_default2.gray(`Hash: ${latest.hash}`));
+  console.log(source_default2.gray(`Message: ${latest.message}`));
+  console.log(source_default2.gray(`Created: ${new Date(latest.created_at).toLocaleString()}`));
+  if (latest.memory_refs.length > 0) {
+    console.log(source_default2.cyan(`
+Linked Memories (${latest.memory_refs.length}):`));
+    for (const ref of latest.memory_refs) {
+      console.log(source_default2.gray(`  • ${ref}`));
+    }
+  }
+  console.log(source_default2.bold(`
+---
+`));
+  console.log(content);
+  if (latest.memory_refs.length > 0) {
+    console.log(source_default2.bold(`
+---
+`));
+    console.log(source_default2.cyan("Linked Memory Records:"));
+    console.log(source_default2.gray(`(Use 'am memory query --all' to see full records)
+`));
+  }
+}
+var init_link = __esm(() => {
   init_source();
   init_registry();
   init_manifest();
@@ -3153,7 +3285,7 @@ var source_default = chalk;
 // src/index.ts
 import { spawn, execFileSync } from "child_process";
 import { execSync } from "child_process";
-import fs, { existsSync as existsSync6 } from "fs";
+import fs, { existsSync as existsSync7 } from "fs";
 import path from "path";
 import crypto from "crypto";
 var program2 = new Command;
@@ -3798,14 +3930,14 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
 var memoryProgram = new Command;
 memoryProgram.name("memory").description("Structured expertise management for agents").version("1.0.0");
 memoryProgram.command("init").description("Initialize agentmux memory storage").action(async () => {
-  const { existsSync: existsSync7 } = await import("fs");
+  const { existsSync: existsSync8 } = await import("fs");
   const { ensureExpertiseDir: ensureExpertiseDir2, readConfig: readConfig2, writeConfig: writeConfig2, getExpertisePath: getExpertisePath2 } = await Promise.resolve().then(() => (init_config(), exports_config));
   const { createExpertiseFile: createExpertiseFile4 } = await Promise.resolve().then(() => (init_store2(), exports_store));
   await ensureExpertiseDir2();
   const config = await readConfig2();
   for (const domain of config.domains) {
     const filePath = getExpertisePath2(domain);
-    if (!existsSync7(filePath)) {
+    if (!existsSync8(filePath)) {
       await createExpertiseFile4(filePath);
     }
   }
@@ -4091,7 +4223,7 @@ memoryProgram.command("status").description("Show memory status - record counts 
   const { readExpertiseFile: readExpertiseFile2, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
   const config = await readConfig2();
   const expertiseDir = getExpertiseDir2();
-  if (!existsSync6(expertiseDir)) {
+  if (!existsSync7(expertiseDir)) {
     console.log(source_default.yellow("No .agentmux/expertise/ found. Run `am memory init` first."));
     return;
   }
@@ -4145,9 +4277,23 @@ planProgram.command("log").argument("<name>", "plan name").description("Show ver
   const { logPlan: logPlan2 } = await Promise.resolve().then(() => (init_commit(), exports_commit));
   await logPlan2(name);
 });
-planProgram.command("show").argument("<name>", "plan name").description("Show current plan version").action(async (name) => {
-  const { showPlan: showPlan2 } = await Promise.resolve().then(() => (init_commit(), exports_commit));
-  await showPlan2(name);
+planProgram.command("show").argument("<name>", "plan name").option("--with-memory", "show linked memory records").description("Show current plan version").action(async (name, options) => {
+  if (options.withMemory) {
+    const { showPlanWithMemory: showPlanWithMemory2 } = await Promise.resolve().then(() => (init_link(), exports_link));
+    await showPlanWithMemory2(name);
+  } else {
+    const { showPlan: showPlan2 } = await Promise.resolve().then(() => (init_commit(), exports_commit));
+    await showPlan2(name);
+  }
+});
+planProgram.command("link").argument("<plan>", "plan name").option("--memory <ref>", "memory reference ID (e.g., am-8f2d)").option("--version <version>", "specific version (default: current)").description("Link memory record to plan version").action(async (plan, options) => {
+  if (!options.memory) {
+    console.log(source_default.red("Error: --memory <ref> is required"));
+    console.log(source_default.gray("Example: am plan link api-design --memory am-8f2d"));
+    return;
+  }
+  const { linkMemory: linkMemory2 } = await Promise.resolve().then(() => (init_link(), exports_link));
+  await linkMemory2(plan, options.memory, options.version);
 });
 program2.addCommand(planProgram);
 program2.parse();

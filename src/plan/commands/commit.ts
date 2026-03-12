@@ -13,24 +13,23 @@ export async function commitPlan(name: string, message: string): Promise<void> {
   }
   
   const planDir = getPlanDir(plan.name);
-  const sharedPlanPath = `${planDir}/current.md`;
+  const draftPath = `${planDir}/draft.md`;
+  const rootPlanPath = `${process.cwd()}/plan.md`;
   
   let content: string;
   let sourcePath: string;
   
-  if (existsSync(sharedPlanPath)) {
-    sourcePath = sharedPlanPath;
-    content = readFileSync(sharedPlanPath, "utf-8");
+  // Read from draft.md first, then root plan.md
+  if (existsSync(draftPath)) {
+    sourcePath = draftPath;
+    content = readFileSync(draftPath, "utf-8");
+  } else if (existsSync(rootPlanPath)) {
+    sourcePath = rootPlanPath;
+    content = readFileSync(rootPlanPath, "utf-8");
   } else {
-    const rootPlanPath = `${process.cwd()}/plan.md`;
-    if (existsSync(rootPlanPath)) {
-      sourcePath = rootPlanPath;
-      content = readFileSync(rootPlanPath, "utf-8");
-    } else {
-      console.log(chalk.red("No plan content found"));
-      console.log(chalk.gray("Create plan.md in project root or in the plan directory"));
-      return;
-    }
+    console.log(chalk.red("No plan content found"));
+    console.log(chalk.gray("Create draft.md in plan dir or plan.md in project root"));
+    return;
   }
   
   const entry = addVersion(plan.name, message, content);
@@ -74,6 +73,7 @@ export async function logPlan(name: string): Promise<void> {
     if (entry.parent) {
       console.log(chalk.gray(`    parent: ${entry.parent}`));
     }
+    console.log(chalk.gray(`    by: @${entry.created_by}`));
     console.log();
   }
 }

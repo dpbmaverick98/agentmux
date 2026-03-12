@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { getManifestPath, ensurePlanDir, getPlanDir, getCurrentSymlinkPath } from "./config.ts";
+import { symlinkSync, existsSync as fsExists, unlinkSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { getManifestPath, ensurePlanDir, getPlanDir, getCurrentSymlinkPath, getAgentName } from "./config.ts";
 
 export interface ManifestEntry {
   version: string;
@@ -7,6 +9,7 @@ export interface ManifestEntry {
   parent: string | null;
   message: string;
   created_at: string;
+  created_by: string;
   memory_refs: string[];
 }
 
@@ -16,14 +19,24 @@ function readManifest(planName: string): ManifestEntry[] {
   
   const content = readFileSync(manifestPath, "utf-8");
   if (!content.trim()) return [];
-  return content.trim().split("\n").map(line => JSON.parse(line) as ManifestEntry);
+  
+  const entries: ManifestEntry[] = [];
+  const lines = content.trim().split("\n");
+  for (const line of lines) {
+    try {
+      entries.push(JSON.parse(line) as ManifestEntry);
+    } catch {
+      // Skip corrupted line, continue reading
+    }
+  }
+  return entries;
 }
 
 function writeManifest(planName: string, entries: ManifestEntry[]): void {
   ensurePlanDir(planName);
   const manifestPath = getManifestPath(planName);
-  const content = entries.map(e => JSON.stringify(e)).join("\n");
-  writeFileSync(manifestPath, content + "\n", "utf-8");
+  const content = entries.map(e => JSON.stringify(e)).join("\n") + "\n";
+  atomicWrite(manifestPath, content);
 }
 
 export function getVersionHistory(planName: string): ManifestEntry[] {
@@ -58,6 +71,7 @@ export function addVersion(
     parent: latest ? latest.version : null,
     message,
     created_at: new Date().toISOString(),
+    created_by: getAgentName(),
     memory_refs: [],
   };
   
@@ -68,13 +82,22 @@ export function addVersion(
 }
 
 function generateHash(content: string): string {
-  let hash = 0;
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+  return createHash("sha256").update(content).digest("hex").slice(0, 8);
+}
+
+function atomicWrite(path: string, content: string): void {
+  const tmpPath = `${path}.tmp.${Date.now()}`;
+  writeFileSync(tmpPath, content, "utf-8");
+  try {
+    const { renameSync } = require("node:fs");
+    renameSync(tmpPath, path);
+  } catch (err) {
+    try {
+      const { unlinkSync } = require("node:fs");
+      unlinkSync(tmpPath);
+    } catch {}
+    throw err;
   }
-  return Math.abs(hash).toString(16).slice(0, 6);
 }
 
 export function addMemoryRef(planName: string, version: string, memoryRef: string): void {
@@ -93,8 +116,6 @@ export function updateCurrentSymlink(planName: string, version: string, hash: st
   const planDir = getPlanDir(planName);
   const versionFile = `v${version}-${hash}.md`;
   const symlinkPath = getCurrentSymlinkPath(planName);
-  
-  const { symlinkSync, existsSync, unlinkSync } = require("node:fs");
   
   if (existsSync(symlinkPath)) {
     unlinkSync(symlinkPath);

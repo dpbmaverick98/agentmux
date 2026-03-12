@@ -1274,10 +1274,32 @@ planProgram
 planProgram
   .command('show')
   .argument('<name>', 'plan name')
+  .option('--with-memory', 'show linked memory records')
   .description('Show current plan version')
-  .action(async (name: string) => {
-    const { showPlan } = await import('./plan/commands/commit.ts');
-    await showPlan(name);
+  .action(async (name: string, options: any) => {
+    if (options.withMemory) {
+      const { showPlanWithMemory } = await import('./plan/commands/link.ts');
+      await showPlanWithMemory(name);
+    } else {
+      const { showPlan } = await import('./plan/commands/commit.ts');
+      await showPlan(name);
+    }
+  });
+
+planProgram
+  .command('link')
+  .argument('<plan>', 'plan name')
+  .option('--memory <ref>', 'memory reference ID (e.g., am-8f2d)')
+  .option('--version <version>', 'specific version (default: current)')
+  .description('Link memory record to plan version')
+  .action(async (plan: string, options: any) => {
+    if (!options.memory) {
+      console.log(chalk.red("Error: --memory <ref> is required"));
+      console.log(chalk.gray("Example: am plan link api-design --memory am-8f2d"));
+      return;
+    }
+    const { linkMemory } = await import('./plan/commands/link.ts');
+    await linkMemory(plan, options.memory, options.version);
   });
 
 program.addCommand(planProgram);

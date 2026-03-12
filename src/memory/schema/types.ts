@@ -16,6 +16,7 @@ export interface BaseRecord {
   evidence?: Evidence;
   tags?: string[];
   relates_to?: string[];
+  plan_refs?: string[];
 }
 
 export interface ConventionRecord extends BaseRecord {

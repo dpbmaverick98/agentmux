@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { renameSync } from "node:fs";
 import { getPlansDir, ensurePlansDir, getAgentName } from "./config.ts";
 
 export interface PlanRegistryEntry {
@@ -20,18 +21,42 @@ function ensureIndex(): void {
   }
 }
 
+function atomicWrite(path: string, content: string): void {
+  const tmpPath = `${path}.tmp.${Date.now()}`;
+  writeFileSync(tmpPath, content, "utf-8");
+  try {
+    renameSync(tmpPath, path);
+  } catch (err) {
+    try {
+      const { unlinkSync } = require("node:fs");
+      unlinkSync(tmpPath);
+    } catch {}
+    throw err;
+  }
+}
+
 function readIndex(): PlanRegistryEntry[] {
   ensureIndex();
   const indexPath = getIndexPath();
   const content = readFileSync(indexPath, "utf-8");
   if (!content.trim()) return [];
-  return content.trim().split("\n").map(line => JSON.parse(line) as PlanRegistryEntry);
+  
+  const entries: PlanRegistryEntry[] = [];
+  const lines = content.trim().split("\n");
+  for (const line of lines) {
+    try {
+      entries.push(JSON.parse(line) as PlanRegistryEntry);
+    } catch {
+      // Skip corrupted line
+    }
+  }
+  return entries;
 }
 
 function writeIndex(entries: PlanRegistryEntry[]): void {
   const indexPath = getIndexPath();
-  const content = entries.map(e => JSON.stringify(e)).join("\n");
-  writeFileSync(indexPath, content + "\n", "utf-8");
+  const content = entries.map(e => JSON.stringify(e)).join("\n") + "\n";
+  atomicWrite(indexPath, content);
 }
 
 export function listPlans(): PlanRegistryEntry[] {
