@@ -1227,4 +1227,59 @@ memoryProgram
 
 program.addCommand(memoryProgram);
 
+// Plan subcommand
+const planProgram = new Command();
+planProgram
+  .name('plan')
+  .description('Versioned plan management for multi-agent collaboration')
+  .version('1.0.0');
+
+planProgram
+  .command('init')
+  .argument('<name>', 'plan name')
+  .description('Create a new plan')
+  .action(async (name: string) => {
+    const { initPlan } = await import('./plan/commands/init.ts');
+    await initPlan(name);
+  });
+
+planProgram
+  .command('list')
+  .description('List all plans')
+  .action(async () => {
+    const { listPlanCommand } = await import('./plan/commands/init.ts');
+    await listPlanCommand();
+  });
+
+planProgram
+  .command('commit')
+  .argument('<name>', 'plan name')
+  .option('-m, --message <message>', 'commit message')
+  .description('Commit current plan.md as new version')
+  .action(async (name: string, options: any) => {
+    const { commitPlan } = await import('./plan/commands/commit.ts');
+    const message = options.message || `Update ${name}`;
+    await commitPlan(name, message);
+  });
+
+planProgram
+  .command('log')
+  .argument('<name>', 'plan name')
+  .description('Show version history')
+  .action(async (name: string) => {
+    const { logPlan } = await import('./plan/commands/commit.ts');
+    await logPlan(name);
+  });
+
+planProgram
+  .command('show')
+  .argument('<name>', 'plan name')
+  .description('Show current plan version')
+  .action(async (name: string) => {
+    const { showPlan } = await import('./plan/commands/commit.ts');
+    await showPlan(name);
+  });
+
+program.addCommand(planProgram);
+
 program.parse();
