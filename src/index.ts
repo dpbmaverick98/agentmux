@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { spawn, execFileSync } from 'child_process';
+import { spawn, execFileSync, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -639,6 +639,13 @@ program
     }
     
     if (options.install && name) {
+      // Validate workflow name (prevent path traversal)
+      if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        console.log(chalk.red(`❌ Invalid workflow name: '${name}'`));
+        console.log(chalk.gray('   Workflow names can only contain letters, numbers, hyphens, and underscores'));
+        return;
+      }
+      
       // Install workflow from GitHub
       console.log(chalk.blue(`🔧 Installing workflow: ${name}`));
       const workflowUrl = `https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/workflows/${name}/SKILL.md`;
@@ -945,7 +952,7 @@ program
     
     // Check if session exists
     try {
-      execSync(`tmux has-session -t ${session} 2>/dev/null`);
+      execFileSync('tmux', ['has-session', '-t', session], { stdio: 'ignore' });
     } catch {
       console.log(chalk.red('\n❌ No active AgentMux session.\n'));
       return;

@@ -2364,7 +2364,7 @@ var chalkStderr = createChalk({ level: stderrColor ? stderrColor.level : 0 });
 var source_default = chalk;
 
 // src/index.ts
-import { spawn, execFileSync } from "child_process";
+import { spawn, execFileSync, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 var program2 = new Command;
@@ -2844,6 +2844,11 @@ program2.command("workflow [name]").description("List, show, or install workflow
     fs.mkdirSync(workflowsDir, { recursive: true });
   }
   if (options.install && name) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      console.log(source_default.red(`\u274C Invalid workflow name: '${name}'`));
+      console.log(source_default.gray("   Workflow names can only contain letters, numbers, hyphens, and underscores"));
+      return;
+    }
     console.log(source_default.blue(`\uD83D\uDD27 Installing workflow: ${name}`));
     const workflowUrl = `https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/workflows/${name}/SKILL.md`;
     const targetDir = path.join(workflowsDir, name);
@@ -3108,7 +3113,7 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
     return;
   const session = getSessionName();
   try {
-    execSync(`tmux has-session -t ${session} 2>/dev/null`);
+    execFileSync("tmux", ["has-session", "-t", session], { stdio: "ignore" });
   } catch {
     console.log(source_default.red(`
 \u274C No active AgentMux session.
