@@ -111,6 +111,28 @@ agentmux commits
 agentmux clear-commits
 ```
 
+## Workflows
+
+Install and use agent coordination workflows:
+
+### List available workflows
+```bash
+agentmux workflow
+```
+
+### Install a workflow
+```bash
+agentmux workflow detailed-commits --install
+```
+
+### View workflow documentation
+```bash
+agentmux workflow detailed-commits
+```
+
+**Available workflows:**
+- **detailed-commits** - Standard workflow for well-documented commits with full context (what, why, assumptions) and review coordination
+
 ## Quick Workflow
 
 1. `agentmux list` - Check who's online

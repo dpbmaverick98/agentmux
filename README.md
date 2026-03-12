@@ -1,6 +1,6 @@
 # AgentMux 
 
-Ultra-lean multi-agent terminal multiplexer using tmux and JJ version control.
+Ultra-lean multi-agent terminal multiplexer using tmux with lightweight commit tracking.
 
 ## One-Line Install
 
@@ -8,7 +8,7 @@ Ultra-lean multi-agent terminal multiplexer using tmux and JJ version control.
 curl -fsSL https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/install.sh | bash
 ```
 
-This installs: claude, opencode, jj, tmux, bun, and agentmux itself.
+This installs: claude, opencode, tmux, bun, and agentmux itself.
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ agentmux start
 ```
 ┌─────────────────────┬─────────────────────┐
 │    📊 STATUS        │  🤖 nui (opencode)  │
-│   (live JJ log)     │    Agent #1         │
+│   (commit log)      │    Agent #1         │
 ├─────────────────────┼─────────────────────┤
 │  🤖 sam (opencode)  │  🤖 wit (claude)    │
 │    Agent #2         │    Agent #3         │
@@ -39,9 +39,10 @@ agentmux start
 ```
 
 - **4-pane split screen** using tmux
-- **Live status** shows JJ changes every 3 seconds
+- **Live status** shows commits and messages every 3 seconds
 - **Cross-agent messaging** via `agentmux send`
-- **JJ version control** in `.agentmux/.jj/`
+- **Commit tracking** in `.agentmux/shared/commits.txt`
+- **Workflows** for agent coordination patterns
 
 ## Commands
 
@@ -49,11 +50,11 @@ agentmux start
 
 | Command | Description |
 |---------|-------------|
-| `agentmux init` | Initialize .agentmux/ directory with JJ repo |
+| `agentmux init` | Initialize .agentmux/ directory |
 | `agentmux start` | Launch 4-pane tmux session with all agents |
 | `agentmux stop` | Kill the tmux session |
 | `agentmux list` | Show all agents with status and harness |
-| `agentmux status` | Show live-updating status (JJ changes, agents, messages) |
+| `agentmux status` | Show live-updating status (commits, agents, messages) |
 
 ### Messaging Commands
 
@@ -62,6 +63,46 @@ agentmux start
 | `agentmux send nui "message"` | Send message to nui (appears in their terminal) |
 | `agentmux send sam "message"` | Send message to sam |
 | `agentmux send wit "message"` | Send message to wit |
+
+### Commit Tracking Commands
+
+| Command | Description |
+|---------|-------------|
+| `agentmux commit <hash> "@agent: message"` | Log a commit (○ = pending) |
+| `agentmux review <hash>` | Mark commit as reviewed (● = done) |
+| `agentmux commits` or `agentmux log` | Show recent commits |
+| `agentmux clear-commits` | Clear commit history |
+
+**Commit Examples:**
+```bash
+# Log your work
+agentmux commit abc123 "@nui: implemented auth API"
+# Shows in status: ○ abc123 @nui: implemented auth API
+
+# Review others' work
+agentmux review abc123
+# Changes to: ● abc123 @nui: implemented auth API (sam)
+```
+
+### Workflow Commands
+
+| Command | Description |
+|---------|-------------|
+| `agentmux workflow` | List installed workflows |
+| `agentmux workflow <name>` | View workflow documentation |
+| `agentmux workflow <name> --install` | Install workflow from GitHub |
+
+**Workflow Examples:**
+```bash
+# List workflows
+agentmux workflow
+
+# Install detailed-commits workflow
+agentmux workflow detailed-commits --install
+
+# View workflow
+agentmux workflow detailed-commits
+```
 
 ### Agent Management Commands
 
@@ -94,21 +135,6 @@ agentmux send sam "Can you review my changes?"
 # 📨 [@nui → @sam]: Can you review my changes?
 ```
 
-### JJ Workflow
-
-```bash
-# Create a change (agents do this automatically via skill)
-jj new -m "@nui: designed auth API"
-
-# See changes
-jj log                    # Show commit history
-jj diff                   # Show current changes
-jj status                 # Show repository status
-
-# Update a change
-jj describe -m "@nui: fixed bug in auth flow"
-```
-
 ## The Three Agents
 
 | Agent | Harness | Position | Role |
@@ -120,7 +146,8 @@ jj describe -m "@nui: fixed bug in auth flow"
 Each agent:
 - Has their own environment variables (`AGENTMUX_AGENT=nui`)
 - Can message other agents via `agentmux send`
-- Commits to JJ with descriptive messages
+- Can log commits with `agentmux commit`
+- Can view workflows with `agentmux workflow`
 - Can see the live status in the top-left pane
 
 ## Cross-Agent Communication
@@ -133,6 +160,9 @@ agentmux send sam "I need help with the database schema"
 
 # Share progress
 agentmux send wit "Auth module is complete, ready for review"
+
+# Log your work
+agentmux commit abc123 "@nui: implemented auth API"
 
 # Broadcast to team
 agentmux send nui "Team sync in 5 minutes"
@@ -150,11 +180,13 @@ Messages appear directly in the agent's terminal:
 ```
 project/
 ├── .agentmux/
-│   ├── .jj/                        # JJ version control
-│   ├── config.toml                 # Project config
-│   └── shared/                     # Shared context
-│       ├── plan.md                 # Project plan
-│       └── messages.txt            # Message log
+│   ├── shared/                     # Shared context
+│   │   ├── plan.md                 # Project plan
+│   │   ├── messages.txt            # Message log
+│   │   └── commits.txt             # Commit tracking
+│   └── workflows/                  # Installed workflows
+│       └── detailed-commits/
+│           └── SKILL.md
 └── [your project files]
 ```
 
@@ -169,18 +201,10 @@ Provides:
 - Available commands (`agentmux list`, `agentmux send`, `agentmux spawn`, etc.)
 - How to message other agents
 - Spawning and killing agents
+- Commit tracking workflow
+- Workflow management
 - Environment variables
 - Keyboard shortcuts
-
-### `/jj-workflow:` - JJ Version Control
-Access via: `/jj-workflow: <command>`
-
-Provides:
-- Creating and updating changes
-- Viewing commit history
-- Agent tagging conventions
-- JJ vs Git differences
-- Advanced commands
 
 ## Keyboard Shortcuts
 
@@ -198,7 +222,6 @@ When in the tmux session:
 
 - **macOS or Linux**
 - **tmux** - Terminal multiplexer
-- **jj** - JJ version control (Jujutsu)
 - **bun** - JavaScript runtime
 - **claude** - Anthropic's CLI
 - **opencode** - Opencode CLI
@@ -208,9 +231,10 @@ All installed automatically by the one-liner installer.
 ## Philosophy
 
 - **tmux IS the infrastructure** - No custom TUI needed
-- **JJ for version control** - Agents commit naturally with descriptive messages
+- **Simple commit tracking** - Lightweight logging, not full version control
 - **Visible communication** - tmux send-keys shows messages in real-time
-- **Simple** - ~300 lines of TypeScript, minimal magic
+- **Workflows over automation** - Agents follow documented patterns
+- **Simple** - ~400 lines of TypeScript, minimal magic
 
 ## Troubleshooting
 
@@ -220,8 +244,8 @@ The installer detects non-interactive mode and skips auto-attach. Run `agentmux 
 ### Messages not appearing
 Make sure the tmux session is running: `tmux attach -t agentmux`
 
-### JJ changes not showing
-The status pane refreshes every 3 seconds. Make sure you're committing with `jj new` or `jj describe`.
+### Commits not showing in status
+The status pane refreshes every 3 seconds. Make sure you're logging commits with `agentmux commit`.
 
 ### Agent not responding
 Check if the agent is running: `agentmux list`
