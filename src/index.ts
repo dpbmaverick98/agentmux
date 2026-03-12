@@ -1069,7 +1069,7 @@ memoryProgram
   .command('record')
   .argument('<domain>', 'expertise domain')
   .argument('[content]', 'record content')
-  .option('--type <type>', 'record type', 'convention')
+  .option('--type <type>', 'record type (convention, failure, decision)', 'convention')
   .option('--classification <classification>', 'classification level', 'tactical')
   .option('--description <description>', 'description of the record')
   .option('--resolution <resolution>', 'resolution for failure records')
@@ -1160,7 +1160,7 @@ memoryProgram
         break;
       }
       default:
-        console.error(chalk.red(`Error: Unknown record type "${recordType}"`));
+        console.error(chalk.red(`Error: Unknown record type "${recordType}". Valid types: convention, failure, decision`));
         process.exitCode = 1;
         return;
     }

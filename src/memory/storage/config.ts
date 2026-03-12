@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentMuxDir } from "../../lib/paths.ts";
+import { createExpertiseFile } from "./store.ts";
 
 const AGENTMUX_DIR = getAgentMuxDir();
 const EXPERTISE_DIR = join(AGENTMUX_DIR, "expertise");
@@ -83,5 +84,3 @@ export async function addDomain(domain: string): Promise<void> {
     await createExpertiseFile(filePath);
   }
 }
-
-export { createExpertiseFile } from "./store.ts";
