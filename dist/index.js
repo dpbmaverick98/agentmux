@@ -3435,6 +3435,97 @@ var init_link = __esm(() => {
   init_config();
 });
 
+// src/plan/commands/timeline.ts
+var exports_timeline = {};
+__export(exports_timeline, {
+  timelinePlan: () => timelinePlan
+});
+async function timelinePlan(name) {
+  if (name) {
+    await showPlanTimeline(name);
+  } else {
+    await showAllPlansTimeline();
+  }
+}
+async function showPlanTimeline(name) {
+  const plan = getPlan(name);
+  if (!plan) {
+    console.log(source_default2.red(`Plan '${name}' not found`));
+    return;
+  }
+  const history = getVersionHistory(plan.name);
+  if (history.length === 0) {
+    console.log(source_default2.yellow("No versions yet. Commit with: am plan commit <name> -m <message>"));
+    return;
+  }
+  console.log(source_default2.bold.cyan(`
+╔══════════════════════════════════════════╗`));
+  console.log(source_default2.bold.cyan(`║  \uD83D\uDCC5 Timeline: ${plan.name.padEnd(28)}║`));
+  console.log(source_default2.bold.cyan(`╚══════════════════════════════════════════╝
+`));
+  for (let i = history.length - 1;i >= 0; i--) {
+    const entry = history[i];
+    const isLatest = i === history.length - 1;
+    const connector = i === 0 ? "╰" : "╠";
+    const branch = i === 0 ? "╯" : "╣";
+    const time = new Date(entry.created_at).toLocaleString();
+    const versionBadge = isLatest ? source_default2.green("●") : "○";
+    console.log(source_default2.gray(`${connector}── ${versionBadge} ${source_default2.bold(entry.version)} ${entry.hash}`));
+    console.log(source_default2.gray(`   ${entry.message}`));
+    console.log(source_default2.gray(`   by: @${entry.created_by}`));
+    if (entry.memory_refs.length > 0) {
+      console.log(source_default2.cyan(`   ${branch}── \uD83D\uDCBE Linked memories:`));
+      for (const ref of entry.memory_refs.slice(0, 3)) {
+        console.log(source_default2.gray(`   ${branch}    • ${ref}`));
+      }
+      if (entry.memory_refs.length > 3) {
+        console.log(source_default2.gray(`   ${branch}    + ${entry.memory_refs.length - 3} more`));
+      }
+    }
+    if (entry.parent) {
+      console.log(source_default2.gray(`   ${branch}── ↑ parent: ${entry.parent}`));
+    }
+    console.log();
+  }
+  console.log(source_default2.gray("Legend: ● = current, ○ = historical, ↑ = parent version"));
+}
+async function showAllPlansTimeline() {
+  const plans = listPlans();
+  if (plans.length === 0) {
+    console.log(source_default2.yellow("No plans found. Create one with: am plan init <name>"));
+    return;
+  }
+  console.log(source_default2.bold.cyan(`
+╔══════════════════════════════════════════╗`));
+  console.log(source_default2.bold.cyan(`║  \uD83D\uDCC5 All Plans Timeline               ║`));
+  console.log(source_default2.bold.cyan(`╚══════════════════════════════════════════╝
+`));
+  for (const plan of plans) {
+    const history = getVersionHistory(plan.name);
+    const versionCount = history.length;
+    const latest = history[history.length - 1];
+    console.log(source_default2.cyan(`┌── ${source_default2.bold(plan.name)}`));
+    console.log(source_default2.gray(`│   creator: @${plan.creator}`));
+    console.log(source_default2.gray(`│   versions: ${versionCount}`));
+    if (latest) {
+      console.log(source_default2.gray(`│   latest: ${latest.version} ${latest.hash}`));
+      console.log(source_default2.gray(`│   ${latest.message}`));
+      if (latest.memory_refs.length > 0) {
+        console.log(source_default2.cyan(`│   \uD83D\uDCBE ${latest.memory_refs.length} linked memories`));
+      }
+    }
+    const isLast = plan === plans[plans.length - 1];
+    console.log(source_default2.gray(isLast ? "└" : "├"));
+    console.log();
+  }
+  console.log(source_default2.gray("Use 'am plan timeline <name>' for detailed view of a specific plan"));
+}
+var init_timeline = __esm(() => {
+  init_source();
+  init_registry();
+  init_manifest();
+});
+
 // node_modules/commander/esm.mjs
 var import__ = __toESM(require_commander(), 1);
 var {
@@ -4784,6 +4875,10 @@ planProgram.command("link").argument("<plan>", "plan name").option("--memory <re
   }
   const { linkMemory: linkMemory2 } = await Promise.resolve().then(() => (init_link(), exports_link));
   await linkMemory2(plan, options.memory, options.version);
+});
+planProgram.command("timeline").argument("[name]", "plan name (optional, shows all plans if omitted)").description("Show ASCII timeline of plan evolution").action(async (name) => {
+  const { timelinePlan: timelinePlan2 } = await Promise.resolve().then(() => (init_timeline(), exports_timeline));
+  await timelinePlan2(name);
 });
 program2.addCommand(planProgram);
 program2.parse();

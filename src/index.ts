@@ -1506,6 +1506,15 @@ planProgram
     await linkMemory(plan, options.memory, options.version);
   });
 
+planProgram
+  .command('timeline')
+  .argument('[name]', 'plan name (optional, shows all plans if omitted)')
+  .description('Show ASCII timeline of plan evolution')
+  .action(async (name: string | undefined) => {
+    const { timelinePlan } = await import('./plan/commands/timeline.ts');
+    await timelinePlan(name);
+  });
+
 program.addCommand(planProgram);
 
 program.parse();
