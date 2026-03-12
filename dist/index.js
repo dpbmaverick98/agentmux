@@ -2685,6 +2685,99 @@ var init_store2 = __esm(() => {
   init_config();
 });
 
+// src/context/matcher.ts
+var exports_matcher = {};
+__export(exports_matcher, {
+  matchMemories: () => matchMemories,
+  formatMemoryForInjection: () => formatMemoryForInjection,
+  extractKeywords: () => extractKeywords,
+  calculateRelevance: () => calculateRelevance
+});
+function extractKeywords(text) {
+  const tokens = text.toLowerCase().replace(/[^\w\s]/g, " ").split(/\s+/).filter((t) => t.length > 2);
+  const stopWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "this",
+    "that",
+    "from",
+    "have",
+    "has",
+    "will",
+    "would",
+    "could",
+    "should",
+    "what",
+    "when",
+    "where",
+    "which",
+    "there",
+    "were",
+    "been",
+    "being",
+    "some",
+    "them",
+    "they",
+    "these",
+    "those",
+    "about",
+    "into",
+    "more",
+    "such",
+    "into",
+    "after",
+    "before"
+  ]);
+  return [...new Set(tokens.filter((t) => !stopWords.has(t)))];
+}
+function calculateRelevance(record, keywords) {
+  let score = 0;
+  const recordText = getRecordText(record).toLowerCase();
+  const recordKeywords = extractKeywords(recordText);
+  for (const kw of keywords) {
+    if (recordKeywords.includes(kw)) {
+      score += 1;
+    }
+  }
+  if (record.classification === "foundational") {
+    score *= 1.5;
+  }
+  return score;
+}
+function getRecordText(record) {
+  switch (record.type) {
+    case "convention":
+      return record.content;
+    case "failure":
+      return `${record.description} ${record.resolution}`;
+    case "decision":
+      return `${record.title} ${record.rationale}`;
+  }
+}
+function matchMemories(records, message, maxResults = 2) {
+  const keywords = extractKeywords(message);
+  if (keywords.length === 0) {
+    return [];
+  }
+  const scored = records.map((record) => ({
+    record,
+    score: calculateRelevance(record, keywords)
+  })).filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+  return scored.slice(0, maxResults).map((s) => s.record);
+}
+function formatMemoryForInjection(record) {
+  switch (record.type) {
+    case "convention":
+      return `[context] ${record.content}`;
+    case "failure":
+      return `[context] ${record.description} → ${record.resolution}`;
+    case "decision":
+      return `[context] ${record.title}: ${record.rationale}`;
+  }
+}
+
 // src/memory/schema/types.ts
 var exports_types = {};
 __export(exports_types, {
@@ -3836,14 +3929,36 @@ Recent Messages:`));
     process.exit(0);
   });
 });
-program2.command("send <to> <message...>").description("Send a message to another agent (uses tmux send-keys)").action((to, message) => {
+program2.command("send <to> <message...>").option("--inject", "Inject relevant memory context into message (opt-in)").description("Send a message to another agent (uses tmux send-keys)").action(async (to, message, options) => {
   if (!checkTmux())
     return;
   const session = getSessionName();
   const msg = message.join(" ");
   const from = process.env.AGENTMUX_AGENT || "user";
   const agentMuxDir = getAgentMuxDir4();
-  const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}`;
+  let contextInjection = "";
+  if (options.inject === true) {
+    try {
+      const { readConfig: readConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
+      const { readExpertiseFile: readExpertiseFile3 } = await Promise.resolve().then(() => (init_store2(), exports_store));
+      const { matchMemories: matchMemories2, formatMemoryForInjection: formatMemoryForInjection2 } = await Promise.resolve().then(() => exports_matcher);
+      const config = await readConfig3();
+      const allRecords = [];
+      for (const domain of config.domains) {
+        const filePath = getExpertisePath3(domain);
+        const records = await readExpertiseFile3(filePath);
+        allRecords.push(...records);
+      }
+      const matched = matchMemories2(allRecords, msg, 2);
+      if (matched.length > 0) {
+        contextInjection = `
+
+` + matched.map(formatMemoryForInjection2).join(`
+`);
+      }
+    } catch {}
+  }
+  const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}${contextInjection}`;
   const timestamp = new Date().toISOString();
   try {
     const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
@@ -3851,6 +3966,9 @@ program2.command("send <to> <message...>").description("Send a message to anothe
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${paneNum}`, "-l", displayMsg]);
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${paneNum}`, "Enter"]);
       console.log(source_default.green(`\u2705 Message sent to ${to}`));
+      if (contextInjection) {
+        console.log(source_default.gray(`  + context hints injected`));
+      }
       const messagesPath = path.join(agentMuxDir, "shared", "messages.txt");
       const logEntry = `[${timestamp}] ${displayMsg}
 `;

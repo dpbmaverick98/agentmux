@@ -430,8 +430,9 @@ program
 
 program
   .command('send <to> <message...>')
+  .option('--inject', 'Inject relevant memory context into message (opt-in)')
   .description('Send a message to another agent (uses tmux send-keys)')
-  .action((to: string, message: string[]) => {
+  .action(async (to: string, message: string[], options: { inject: boolean | undefined }) => {
     if (!checkTmux()) return;
 
     const session = getSessionName();
@@ -439,21 +440,48 @@ program
     const from = process.env.AGENTMUX_AGENT || 'user';
     const agentMuxDir = getAgentMuxDir();
 
-    // Create the display message
-    const displayMsg = `📨 [@${from} → @${to}]: ${msg}`;
+    let contextInjection = "";
+    
+    if (options.inject === true) {
+      try {
+        const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
+        const { readExpertiseFile } = await import('./memory/storage/store.ts');
+        const { matchMemories, formatMemoryForInjection } = await import('./context/matcher.ts');
+
+        const config = await readConfig();
+        const allRecords: any[] = [];
+
+        for (const domain of config.domains) {
+          const filePath = getExpertisePath(domain);
+          const records = await readExpertiseFile(filePath);
+          allRecords.push(...records);
+        }
+
+        const matched = matchMemories(allRecords, msg, 2);
+        
+        if (matched.length > 0) {
+          contextInjection = "\n\n" + matched.map(formatMemoryForInjection).join("\n");
+        }
+      } catch {
+        // Silently skip context injection if it fails
+      }
+    }
+
+    const displayMsg = `📨 [@${from} → @${to}]: ${msg}${contextInjection}`;
     const timestamp = new Date().toISOString();
 
     try {
       const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
 
       if (paneNum !== undefined) {
-        // Send message as literal text into the agent's chat input
-        // Use execFileSync with array args to prevent shell injection and ensure ordering
         execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, '-l', displayMsg]);
         execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, 'Enter']);
         console.log(chalk.green(`✅ Message sent to ${to}`));
         
-        // Log message to messages.txt with timestamp
+        if (contextInjection) {
+          console.log(chalk.gray(`  + context hints injected`));
+        }
+        
         const messagesPath = path.join(agentMuxDir, 'shared', 'messages.txt');
         const logEntry = `[${timestamp}] ${displayMsg}\n`;
         fs.appendFileSync(messagesPath, logEntry);
