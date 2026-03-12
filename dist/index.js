@@ -2456,6 +2456,7 @@ program2.command("init").description("Initialize a new AgentMux project in curre
   } catch {}
   fs.mkdirSync(agentMuxDir, { recursive: true });
   fs.mkdirSync(path.join(agentMuxDir, "shared"), { recursive: true });
+  fs.mkdirSync(path.join(agentMuxDir, "workflows"), { recursive: true });
   fs.writeFileSync(path.join(agentMuxDir, "shared", "plan.md"), `# Plan for ${name}
 
 Add your multi-agent plan here.
@@ -2478,7 +2479,8 @@ Review and test the implementation
   console.log(source_default.gray(`
 Directory structure:`));
   console.log(source_default.white("   .agentmux/"));
-  console.log(source_default.white("   \u2514\u2500\u2500 shared/           # Shared context"));
+  console.log(source_default.white("   \u251C\u2500\u2500 shared/           # Shared context"));
+  console.log(source_default.white("   \u2514\u2500\u2500 workflows/        # Agent workflows"));
   console.log(source_default.gray(`
 Skills are installed globally in ~/.claude/skills/`));
   console.log(source_default.gray(`Next step: agentmux start`));
@@ -2837,6 +2839,98 @@ program2.command("clear-commits").description("Clear all commit history").action
     console.log(source_default.green("\u2705 Commit history cleared"));
   } catch (e) {
     console.log(source_default.red("\u274C Failed to clear commits"));
+  }
+});
+program2.command("workflow [name]").description("List, show, or install workflows").option("--install", "Install workflow from GitHub").action((name, options) => {
+  const agentMuxDir = getAgentMuxDir();
+  const workflowsDir = path.join(agentMuxDir, "workflows");
+  if (!fs.existsSync(workflowsDir)) {
+    fs.mkdirSync(workflowsDir, { recursive: true });
+  }
+  if (options.install && name) {
+    console.log(source_default.blue(`\uD83D\uDD27 Installing workflow: ${name}`));
+    const workflowUrl = `https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/workflows/${name}/SKILL.md`;
+    const targetDir = path.join(workflowsDir, name);
+    const targetPath = path.join(targetDir, "SKILL.md");
+    try {
+      if (fs.existsSync(targetPath)) {
+        console.log(source_default.yellow(`\u26A0\uFE0F  Workflow '${name}' is already installed`));
+        console.log(source_default.gray(`   Location: ${targetPath}`));
+        return;
+      }
+      fs.mkdirSync(targetDir, { recursive: true });
+      try {
+        execSync(`curl -fsSL "${workflowUrl}" -o "${targetPath}"`, { stdio: "inherit" });
+        console.log(source_default.green(`\u2705 Workflow '${name}' installed successfully`));
+        console.log(source_default.gray(`   Location: ${targetPath}`));
+        console.log(source_default.gray(`   Usage: agentmux workflow ${name}`));
+      } catch {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+        console.log(source_default.red(`\u274C Failed to download workflow '${name}'`));
+        console.log(source_default.gray(`   URL: ${workflowUrl}`));
+        console.log(source_default.gray(`   Make sure the workflow exists in the repository`));
+      }
+    } catch (e) {
+      console.log(source_default.red(`\u274C Failed to install workflow: ${e}`));
+    }
+  } else if (name) {
+    const workflowPath = path.join(workflowsDir, name, "SKILL.md");
+    try {
+      if (fs.existsSync(workflowPath)) {
+        const content = fs.readFileSync(workflowPath, "utf-8");
+        console.log(source_default.blue(`
+\uD83D\uDCCB Workflow: ${name}
+`));
+        console.log(content);
+      } else {
+        console.log(source_default.red(`\u274C Workflow '${name}' not found`));
+        console.log(source_default.gray(`   Install with: agentmux workflow ${name} --install`));
+        const installed = fs.readdirSync(workflowsDir).filter((f) => {
+          const stat = fs.statSync(path.join(workflowsDir, f));
+          return stat.isDirectory() && fs.existsSync(path.join(workflowsDir, f, "SKILL.md"));
+        });
+        if (installed.length > 0) {
+          console.log(source_default.gray(`
+   Installed workflows:`));
+          installed.forEach((w) => console.log(source_default.gray(`     - ${w}`)));
+        }
+      }
+    } catch (e) {
+      console.log(source_default.red(`\u274C Failed to read workflow: ${e}`));
+    }
+  } else {
+    console.log(source_default.blue(`
+\uD83D\uDCCB Installed Workflows
+`));
+    try {
+      const workflows = [];
+      if (fs.existsSync(workflowsDir)) {
+        const entries = fs.readdirSync(workflowsDir);
+        for (const entry of entries) {
+          const workflowPath = path.join(workflowsDir, entry, "SKILL.md");
+          if (fs.existsSync(workflowPath)) {
+            workflows.push(entry);
+          }
+        }
+      }
+      if (workflows.length === 0) {
+        console.log(source_default.gray("  No workflows installed"));
+        console.log(source_default.gray(`
+  Install workflows from GitHub:`));
+        console.log(source_default.white("    agentmux workflow <name> --install"));
+      } else {
+        workflows.forEach((w) => {
+          console.log(`  \u2713 ${source_default.bold(w)}`);
+        });
+        console.log(source_default.gray(`
+  View workflow: agentmux workflow <name>`));
+      }
+      console.log(source_default.gray(`
+  Available workflows on GitHub:`));
+      console.log(source_default.gray("    - detailed-commits"));
+    } catch (e) {
+      console.log(source_default.red("\u274C Failed to list workflows"));
+    }
   }
 });
 program2.command("install-deps").description("Install all required dependencies (claude, opencode, tmux, bun)").action(() => {
