@@ -1,18 +1,16 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { spawn, execFileSync } from 'child_process';
-import { execSync } from 'child_process';
-import fs, { existsSync } from 'fs';
+import { spawn, execFileSync, execSync } from 'child_process';
+import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 
 const program = new Command();
 
 // Configuration constants
 const MAX_AGENTS = 11;
 const STATUS_REFRESH_INTERVAL_MS = 3000;
-const STATUS_REFRESH_INTERVAL_S = 3;
+const STATUS_REFRESH_INTERVAL_S = STATUS_REFRESH_INTERVAL_MS / 1000;
 
 // Agent configuration
 interface AgentConfig {
@@ -20,30 +18,27 @@ interface AgentConfig {
   pane: number;
   harness: string;
   cmd: string;
-  enabled: boolean;
 }
 
 const AGENTS: AgentConfig[] = [
-  { name: 'status', pane: 0, harness: 'monitor', cmd: '', enabled: true },
-  { name: 'nui', pane: 1, harness: 'opencode', cmd: 'opencode', enabled: true },
-  { name: 'sam', pane: 2, harness: 'opencode', cmd: 'opencode', enabled: true },
-  { name: 'wit', pane: 3, harness: 'claude', cmd: 'claude', enabled: true }
+  { name: 'status', pane: 0, harness: 'monitor', cmd: '' },
+  { name: 'nui', pane: 1, harness: 'opencode', cmd: 'opencode' },
+  { name: 'sam', pane: 2, harness: 'opencode', cmd: 'opencode' },
+  { name: 'wit', pane: 3, harness: 'claude', cmd: 'claude' }
 ];
 
-const AGENT_PANE_MAP: { [key: string]: number } = {
-  'status': 0,
-  'nui': 1,
-  'sam': 2,
-  'wit': 3
-};
+// Derive pane map from AGENTS array
+const AGENT_PANE_MAP: { [key: string]: number } = Object.fromEntries(
+  AGENTS.filter(a => a.name !== 'status').map(a => [a.name, a.pane])
+);
 
 // Get local .agentmux directory for current project
 function getAgentMuxDir(): string {
   return path.join(process.cwd(), '.agentmux');
 }
 
-// Utility to execute shell commands
-function exec(cmd: string, options: any = {}) {
+// Execute command and return output (legacy wrapper for simple commands)
+function exec(cmd: string, options: any = {}): string {
   try {
     return execSync(cmd, { encoding: 'utf-8', ...options });
   } catch (e) {
@@ -62,38 +57,9 @@ function checkTmux(): boolean {
   }
 }
 
-// Check if jj is installed
-function checkJJ(): boolean {
-  try {
-    execSync('which jj');
-    return true;
-  } catch {
-    console.log(chalk.yellow('⚠️  jj not found. Install with: cargo install jj-cli'));
-    return false;
-  }
-}
-
 // Get tmux session name
 function getSessionName(): string {
   return process.env.AGENTMUX_SESSION || 'agentmux';
-}
-
-// Get JJ state hash for change detection
-function getJJStateHash(agentMuxDir: string): string {
-  try {
-    const jjDir = path.join(agentMuxDir, '.jj');
-    fs.accessSync(jjDir, fs.constants.F_OK);
-
-    // Run jj from the project root (parent of .agentmux/)
-    const projectRoot = path.dirname(agentMuxDir);
-    const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
-      cwd: projectRoot,
-      encoding: 'utf-8'
-    });
-    return crypto.createHash('md5').update(log).digest('hex');
-  } catch {
-    return 'no-repo';
-  }
 }
 
 program
@@ -103,7 +69,7 @@ program
 
 program
   .command('install')
-  .description('Install required dependencies (jj, tmux)')
+  .description('Install required dependencies (tmux)')
   .action(() => {
     console.log(chalk.blue('🔧 Installing AgentMux dependencies...\n'));
 
@@ -112,13 +78,12 @@ program
 
     if (platform === 'darwin') {
       console.log(chalk.gray('Detected macOS'));
-      installCmd = 'brew install jj tmux';
+      installCmd = 'brew install tmux';
     } else if (platform === 'linux') {
       console.log(chalk.gray('Detected Linux'));
-      installCmd = 'cargo install jj-cli && sudo apt-get install -y tmux';
+      installCmd = 'sudo apt-get install -y tmux';
     } else {
       console.log(chalk.yellow('⚠️  Unsupported platform. Please install manually:'));
-      console.log(chalk.white('   JJ: cargo install jj-cli'));
       console.log(chalk.white('   tmux: https://github.com/tmux/tmux/wiki/Installing'));
       return;
     }
@@ -134,7 +99,6 @@ program
     } catch (e) {
       console.log(chalk.red('\n❌ Installation failed'));
       console.log(chalk.gray('Try installing manually:'));
-      console.log(chalk.white('   JJ: cargo install jj-cli'));
       console.log(chalk.white('   tmux: brew install tmux (macOS) or apt-get install tmux (Linux)'));
     }
   });
@@ -163,19 +127,7 @@ program
     // Create .agentmux directory structure
     fs.mkdirSync(agentMuxDir, { recursive: true });
     fs.mkdirSync(path.join(agentMuxDir, 'shared'), { recursive: true });
-    fs.mkdirSync(path.join(agentMuxDir, 'skills'), { recursive: true });
-
-    // Initialize JJ in .agentmux/.jj/
-    if (checkJJ()) {
-      try {
-        execSync('jj git init', { cwd: agentMuxDir });
-        console.log(chalk.green('  ✓ JJ initialized in .agentmux/.jj/'));
-      } catch (e) {
-        console.log(chalk.yellow('  ⚠️  Failed to initialize JJ'));
-      }
-    } else {
-      console.log(chalk.yellow('\n⚠️  JJ not installed. Install with: brew install jj'));
-    }
+    fs.mkdirSync(path.join(agentMuxDir, 'workflows'), { recursive: true });
 
     // Create shared files
     fs.writeFileSync(path.join(agentMuxDir, 'shared', 'plan.md'), `# Plan for ${name}
@@ -199,8 +151,8 @@ Review and test the implementation
     console.log(chalk.green('\n✅ Project initialized!'));
     console.log(chalk.gray(`\nDirectory structure:`));
     console.log(chalk.white('   .agentmux/'));
-    console.log(chalk.white('   ├── .jj/              # JJ version control'));
-    console.log(chalk.white('   └── shared/           # Shared context'));
+    console.log(chalk.white('   ├── shared/           # Shared context'));
+    console.log(chalk.white('   └── workflows/        # Agent workflows'));
     console.log(chalk.gray(`\nSkills are installed globally in ~/.claude/skills/`));
     console.log(chalk.gray(`Next step: agentmux start`));
   });
@@ -209,15 +161,15 @@ program
   .command('start')
   .description('Start full AgentMux environment with 4 panes')
   .option('--nui', 'Enable nui agent', true)
+  .option('--no-nui', 'Disable nui agent')
   .option('--sam', 'Enable sam agent', true)
+  .option('--no-sam', 'Disable sam agent')
   .option('--wit', 'Enable wit agent', true)
+  .option('--no-wit', 'Disable wit agent')
   .action((options: any) => {
-    // Check all dependencies first
-    const hasTmux = checkTmux();
-    const hasJJ = checkJJ();
-
-    if (!hasTmux || !hasJJ) {
-      console.log(chalk.red('\n❌ Missing dependencies!'));
+    // Check tmux dependency
+    if (!checkTmux()) {
+      console.log(chalk.red('\n❌ Missing tmux dependency!'));
       console.log(chalk.white('Run: agentmux install\n'));
       return;
     }
@@ -239,29 +191,29 @@ program
 
     // Kill existing session if present
     try {
-      execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+      execFileSync('tmux', ['kill-session', '-t', session], { stdio: 'ignore' });
     } catch {}
 
     // Create 4-pane split screen layout
     console.log(chalk.gray('Creating 4-pane split screen...'));
 
     // Create session with first pane (status - top left) and enable mouse
-    execSync(`tmux new-session -d -s ${session} -n agentmux`);
-    execSync(`tmux set -t ${session} mouse on`);
+    execFileSync('tmux', ['new-session', '-d', '-s', session, '-n', 'agentmux']);
+    execFileSync('tmux', ['set', '-t', session, 'mouse', 'on']);
 
     // Split horizontally - creates right pane (nui - top right)
     console.log(chalk.gray('Creating nui pane...'));
-    execSync(`tmux split-window -h -t ${session}`);
+    execFileSync('tmux', ['split-window', '-h', '-t', session]);
 
     // Go back to left pane and split vertically - creates bottom left (sam)
     console.log(chalk.gray('Creating sam pane...'));
-    execSync(`tmux select-pane -t ${session}:0.0`);
-    execSync(`tmux split-window -v -t ${session}`);
+    execFileSync('tmux', ['select-pane', '-t', `${session}:0.0`]);
+    execFileSync('tmux', ['split-window', '-v', '-t', session]);
 
     // Go to right pane and split vertically - creates bottom right (wit)
     console.log(chalk.gray('Creating wit pane...'));
-    execSync(`tmux select-pane -t ${session}:0.1`);
-    execSync(`tmux split-window -v -t ${session}`);
+    execFileSync('tmux', ['select-pane', '-t', `${session}:0.1`]);
+    execFileSync('tmux', ['split-window', '-v', '-t', session]);
 
     // Layout:
     // Pane 0 (top-left): Status
@@ -273,25 +225,25 @@ program
 
     // Pane 0: Status monitor (live updating)
     console.log(chalk.gray('Setting up status pane...'));
-    execSync(`tmux select-pane -t ${session}:0.0`);
-    execSync(`tmux select-pane -t ${session}:0.0 -T "status"`);
-    execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
+    execFileSync('tmux', ['select-pane', '-t', `${session}:0.0`]);
+    execFileSync('tmux', ['select-pane', '-t', `${session}:0.0`, '-T', 'status']);
+    execFileSync('tmux', ['send-keys', '-t', `${session}:0.0`, `${process.argv[0]} ${process.argv[1]} status`, 'C-m']);
 
     // Start agents in their panes using configuration
     AGENTS.filter(a => a.name !== 'status').forEach(agent => {
       const optionKey = agent.name as keyof typeof options;
       if (options[optionKey]) {
         console.log(chalk.gray(`Starting ${agent.name}...`));
-        execSync(`tmux select-pane -t ${session}:0.${agent.pane}`);
-        execSync(`tmux select-pane -t ${session}:0.${agent.pane} -T "${agent.name} (${agent.harness})"`);
-        execSync(`tmux send-keys -t ${session}:0.${agent.pane} "clear" C-m`);
+        execFileSync('tmux', ['select-pane', '-t', `${session}:0.${agent.pane}`]);
+        execFileSync('tmux', ['select-pane', '-t', `${session}:0.${agent.pane}`, '-T', `${agent.name} (${agent.harness})`]);
+        execFileSync('tmux', ['send-keys', '-t', `${session}:0.${agent.pane}`, 'clear', 'C-m']);
         const agentCmd = `AGENTMUX_AGENT=${agent.name} AGENTMUX_PROJECT=${currentDir} ${agent.cmd}`;
-        execSync(`tmux send-keys -t ${session}:0.${agent.pane} "${agentCmd}" C-m`);
+        execFileSync('tmux', ['send-keys', '-t', `${session}:0.${agent.pane}`, agentCmd, 'C-m']);
       }
     });
 
     // Equalize pane sizes
-    execSync(`tmux select-layout -t ${session} tiled`);
+    execFileSync('tmux', ['select-layout', '-t', session, 'tiled']);
 
     console.log(chalk.green('\n✅ AgentMux environment ready!'));
     console.log(chalk.yellow('\n🖥️  Split Screen Layout:'));
@@ -327,8 +279,7 @@ program
       return;
     }
 
-    const hasJJ = checkJJ();
-    let lastState = '';
+    let lastCommitCount = 0;
     let lastUpdateTime = Date.now();
 
     function renderStatus() {
@@ -341,105 +292,56 @@ program
       const secondsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
       process.stdout.write(`${chalk.gray(`⏱️  Last update: ${secondsSinceUpdate}s ago`)}\n\n`);
 
-      // Show JJ changes
-      console.log(chalk.yellow('JJ Changes:'));
-      if (hasJJ) {
+      // Show Recent Commits
+      console.log(chalk.yellow('Recent Commits:'));
+      try {
+        const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
         try {
-          const jjDir = path.join(agentMuxDir, '.jj');
-          try {
-            fs.accessSync(jjDir, fs.constants.F_OK);
-            // Run jj from the project root (parent of .agentmux/)
-            const projectRoot = path.dirname(agentMuxDir);
-            
-            // Get last 10 commits with author info
-            const logOutput = exec('jj log --no-graph -r "ancestors(@) | heads(all())" --limit 10 2>/dev/null || echo ""', {
-              cwd: projectRoot
-            });
-            
-            // Get bookmarks to check push status
-            const bookmarksOutput = exec('jj bookmark list --all 2>/dev/null || echo ""', {
-              cwd: projectRoot
-            });
-            
-            // Parse bookmarks to find which commits are on remote
-            const pushedCommitIds = new Set<string>();
-            if (bookmarksOutput) {
-              bookmarksOutput.split('\n').forEach(line => {
-                // Parse lines like: "fix-jj-symlink: fed4b02d [origin (ahead by 2)]"
-                const match = line.match(/^\s*(\S+):\s+([a-f0-9]+)/);
+          fs.accessSync(commitsPath, fs.constants.F_OK);
+          // Use exec to tail the last 20 lines
+          const tailOutput = exec(`tail -n 20 "${commitsPath}" 2>/dev/null`);
+          if (tailOutput && tailOutput.trim()) {
+            const lines = tailOutput.trim().split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
+            if (lines.length > 0) {
+              lines.reverse().forEach((line: string) => {
+                // Parse format: [timestamp] PENDING/REVIEWED hash @agent: message [| reviewer]
+                const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
                 if (match) {
-                  pushedCommitIds.add(match[2].substring(0, 12));
+                  const [, timestamp, status, hash, agent, message, reviewer] = match;
+                  const isReviewed = status === 'REVIEWED';
+                  const symbol = isReviewed ? '●' : '○';
+                  const agentName = agent.replace('@', '');
+                  const agentColor = agentName === 'nui' ? chalk.cyan :
+                                    agentName === 'sam' ? chalk.green :
+                                    agentName === 'wit' ? chalk.magenta : chalk.white;
+                  
+                  const shortHash = hash.substring(0, 7);
+                  let displayLine = `${shortHash} ${agent}: ${message}`;
+                  if (reviewer) {
+                    displayLine += ` (${reviewer})`;
+                  }
+                  
+                  console.log(`  ${symbol} ${agentColor(displayLine)}`);
                 }
               });
-            }
-            
-            if (logOutput && logOutput.trim()) {
-              const lines = logOutput.split('\n').filter(l => l.trim());
-              if (lines.length > 0) {
-                lines.forEach(line => {
-                  // Parse JJ log format
-                  // Example: @  vqvsryko nui@agentmux.ai 2026-03-11 12:53:40 fix-jj-symlink* ae0c5d4f
-                  //          │  description
-                  const symbolMatch = line.match(/^([○●@◆])	/);
-                  const commitMatch = line.match(/([a-f0-9]{12})/);
-                  const descMatch = line.match(/│	(.*)$/);
-                  
-                  if (symbolMatch && descMatch) {
-                    const commitId = commitMatch ? commitMatch[1] : '';
-                    const isPushed = pushedCommitIds.has(commitId);
-                    const symbol = isPushed ? '●' : '○';
-                    const description = descMatch[1].trim();
-                    const agentColor = description.includes('@nui') ? chalk.cyan :
-                                      description.includes('@sam') ? chalk.green :
-                                      description.includes('@wit') ? chalk.magenta : chalk.white;
-                    
-                    console.log(`  ${symbol} ${agentColor(description)}`);
-                  } else if (line.includes('@') || line.includes('○') || line.includes('●')) {
-                    // Handle commit line with symbol
-                    const commitMatch = line.match(/([a-f0-9]{12})/);
-                    const commitId = commitMatch ? commitMatch[1] : '';
-                    const isPushed = pushedCommitIds.has(commitId);
-                    const symbol = isPushed ? '●' : '○';
-                    
-                    // Extract author tag
-                    const authorMatch = line.match(/@(\w+)/);
-                    const author = authorMatch ? authorMatch[1] : 'unknown';
-                    
-                    // Extract description if available
-                    let displayLine = line;
-                    const descMatch = line.match(/│	(.*)$/);
-                    if (descMatch) {
-                      displayLine = descMatch[1].trim();
-                    }
-                    
-                    const agentColor = author === 'nui' ? chalk.cyan :
-                                      author === 'sam' ? chalk.green :
-                                      author === 'wit' ? chalk.magenta : chalk.white;
-                    
-                    console.log(`  ${symbol} ${agentColor(displayLine)}`);
-                  }
-                });
-              } else {
-                console.log(chalk.gray('  No commits yet'));
-              }
             } else {
               console.log(chalk.gray('  No commits yet'));
             }
-          } catch {
-            console.log(chalk.gray('  JJ repo initializing...'));
+          } else {
+            console.log(chalk.gray('  No commits yet'));
           }
-        } catch (e) {
-          console.log(chalk.gray('  No changes yet'));
+        } catch {
+          console.log(chalk.gray('  No commits yet'));
         }
-      } else {
-        console.log(chalk.gray('  JJ not installed'));
+      } catch (e) {
+        console.log(chalk.gray('  No commits yet'));
       }
 
       // Show tmux session info
       console.log(chalk.yellow('\nActive Agents:'));
       try {
         const session = getSessionName();
-        const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
+        const output = execFileSync('tmux', ['list-panes', '-t', session, '-F', '#P: #{pane_current_command}'], { encoding: 'utf-8' });
         if (output) {
           const lines = output.trim().split('\n');
           lines.forEach((line, idx) => {
@@ -500,13 +402,19 @@ program
     // Initial render
     renderStatus();
 
-    // Set up polling for JJ changes every 3 seconds
+    // Set up polling for commit changes every 3 seconds
     const pollInterval = setInterval(() => {
-      const currentState = getJJStateHash(agentMuxDir);
-
-      if (currentState !== lastState) {
-        lastState = currentState;
-        lastUpdateTime = Date.now();
+      try {
+        const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+        const stats = fs.statSync(commitsPath);
+        const currentCount = stats.mtime.getTime();
+        
+        if (currentCount !== lastCommitCount) {
+          lastCommitCount = currentCount;
+          lastUpdateTime = Date.now();
+        }
+      } catch {
+        // File doesn't exist yet
       }
       // Always re-render to update the idle counter
       renderStatus();
@@ -572,8 +480,263 @@ program
   });
 
 program
+  .command('commit <hash> <message...>')
+  .description('Log a commit with hash and message (use @agent tag)')
+  .action((hash: string, message: string[]) => {
+    const agentMuxDir = getAgentMuxDir();
+    const agent = process.env.AGENTMUX_AGENT || 'user';
+    const msg = message.join(' ');
+    const timestamp = new Date().toISOString();
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      const logEntry = `[${timestamp}] PENDING ${hash} @${agent}: ${msg}\n`;
+      fs.appendFileSync(commitsPath, logEntry);
+      console.log(chalk.green(`✅ Commit logged: ○ ${hash.substring(0, 7)} @${agent}: ${msg}`));
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to log commit'));
+    }
+  });
+
+program
+  .command('review <hash>')
+  .description('Mark a commit as reviewed')
+  .action((hash: string) => {
+    const agentMuxDir = getAgentMuxDir();
+    const reviewer = process.env.AGENTMUX_AGENT || 'user';
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      
+      // Check if file exists
+      try {
+        fs.accessSync(commitsPath, fs.constants.F_OK);
+      } catch {
+        console.log(chalk.red(`❌ No commits found. Did you mean to create it first with 'agentmux commit'?`));
+        return;
+      }
+      
+      const content = fs.readFileSync(commitsPath, 'utf-8');
+      const lines = content.split('\n');
+      
+      // Find the commit by hash (exact match to avoid substring collisions)
+      let found = false;
+      const hashPattern = new RegExp(`\\s${hash}\\s`);
+      const updatedLines = lines.map(line => {
+        if (!found && line.includes(' PENDING ') && hashPattern.test(line)) {
+          found = true;
+          // Change PENDING to REVIEWED and add reviewer
+          return line.replace(' PENDING ', ' REVIEWED ') + ` | ${reviewer}`;
+        }
+        return line;
+      });
+      
+      if (found) {
+        fs.writeFileSync(commitsPath, updatedLines.join('\n'));
+        console.log(chalk.green(`✅ Commit ${hash.substring(0, 7)} marked as reviewed by @${reviewer}`));
+      } else {
+        // Check if already reviewed
+        const alreadyReviewed = lines.some(line => line.includes(' REVIEWED ') && hashPattern.test(line));
+        if (alreadyReviewed) {
+          console.log(chalk.yellow(`⚠️  Commit ${hash.substring(0, 7)} is already reviewed`));
+          // Still append this reviewer
+          const updatedLines2 = lines.map(line => {
+            if (line.includes(' REVIEWED ') && hashPattern.test(line) && !line.includes(`| ${reviewer}`) && !line.includes(`, ${reviewer}`)) {
+              return line + `, ${reviewer}`;
+            }
+            return line;
+          });
+          fs.writeFileSync(commitsPath, updatedLines2.join('\n'));
+        } else {
+          console.log(chalk.red(`❌ Commit ${hash.substring(0, 7)} not found`));
+        }
+      }
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to review commit'));
+    }
+  });
+
+program
+  .command('commits')
+  .alias('log')
+  .description('Show recent commits')
+  .action(() => {
+    const agentMuxDir = getAgentMuxDir();
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      try {
+        fs.accessSync(commitsPath, fs.constants.F_OK);
+        const content = fs.readFileSync(commitsPath, 'utf-8');
+        const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+        
+        if (lines.length === 0) {
+          console.log(chalk.gray('No commits yet'));
+          return;
+        }
+        
+        console.log(chalk.blue('\n📋 Recent Commits\n'));
+        lines.reverse().slice(0, 20).forEach((line: string) => {
+          const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
+          if (match) {
+            const [, timestamp, status, hash, agent, message, reviewer] = match;
+            const isReviewed = status === 'REVIEWED';
+            const symbol = isReviewed ? '●' : '○';
+            const shortHash = hash.substring(0, 7);
+            const time = new Date(timestamp);
+            const timeStr = time.toLocaleTimeString();
+            
+            console.log(`  ${symbol} ${shortHash} ${agent}: ${message}`);
+            if (reviewer) {
+              console.log(`     reviewed by: ${reviewer}`);
+            }
+          }
+        });
+        console.log();
+      } catch {
+        console.log(chalk.gray('No commits yet'));
+      }
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to read commits'));
+    }
+  });
+
+program
+  .command('clear-commits')
+  .description('Clear all commit history')
+  .action(() => {
+    const agentMuxDir = getAgentMuxDir();
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      fs.writeFileSync(commitsPath, '# Commits history cleared\n');
+      console.log(chalk.green('✅ Commit history cleared'));
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to clear commits'));
+    }
+  });
+
+program
+  .command('workflow [name]')
+  .description('List, show, or install workflows')
+  .option('--install', 'Install workflow from GitHub')
+  .action((name: string | undefined, options: any) => {
+    const agentMuxDir = getAgentMuxDir();
+    const workflowsDir = path.join(agentMuxDir, 'workflows');
+    
+    // Create workflows directory if it doesn't exist
+    if (!fs.existsSync(workflowsDir)) {
+      fs.mkdirSync(workflowsDir, { recursive: true });
+    }
+    
+    if (options.install && name) {
+      // Validate workflow name (prevent path traversal)
+      if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        console.log(chalk.red(`❌ Invalid workflow name: '${name}'`));
+        console.log(chalk.gray('   Workflow names can only contain letters, numbers, hyphens, and underscores'));
+        return;
+      }
+      
+      // Install workflow from GitHub
+      console.log(chalk.blue(`🔧 Installing workflow: ${name}`));
+      const workflowUrl = `https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/workflows/${name}/SKILL.md`;
+      const targetDir = path.join(workflowsDir, name);
+      const targetPath = path.join(targetDir, 'SKILL.md');
+      
+      try {
+        // Check if already installed
+        if (fs.existsSync(targetPath)) {
+          console.log(chalk.yellow(`⚠️  Workflow '${name}' is already installed`));
+          console.log(chalk.gray(`   Location: ${targetPath}`));
+          return;
+        }
+        
+        // Create workflow directory
+        fs.mkdirSync(targetDir, { recursive: true });
+        
+        // Download workflow using curl
+        try {
+          execSync(`curl -fsSL "${workflowUrl}" -o "${targetPath}"`, { stdio: 'inherit' });
+          console.log(chalk.green(`✅ Workflow '${name}' installed successfully`));
+          console.log(chalk.gray(`   Location: ${targetPath}`));
+          console.log(chalk.gray(`   Usage: agentmux workflow ${name}`));
+        } catch {
+          // Clean up if download failed
+          fs.rmSync(targetDir, { recursive: true, force: true });
+          console.log(chalk.red(`❌ Failed to download workflow '${name}'`));
+          console.log(chalk.gray(`   URL: ${workflowUrl}`));
+          console.log(chalk.gray(`   Make sure the workflow exists in the repository`));
+        }
+      } catch (e) {
+        console.log(chalk.red(`❌ Failed to install workflow: ${e}`));
+      }
+    } else if (name) {
+      // Show specific workflow
+      const workflowPath = path.join(workflowsDir, name, 'SKILL.md');
+      
+      try {
+        if (fs.existsSync(workflowPath)) {
+          const content = fs.readFileSync(workflowPath, 'utf-8');
+          console.log(chalk.blue(`\n📋 Workflow: ${name}\n`));
+          console.log(content);
+        } else {
+          console.log(chalk.red(`❌ Workflow '${name}' not found`));
+          console.log(chalk.gray(`   Install with: agentmux workflow ${name} --install`));
+          
+          // List available workflows
+          const installed = fs.readdirSync(workflowsDir).filter(f => {
+            const stat = fs.statSync(path.join(workflowsDir, f));
+            return stat.isDirectory() && fs.existsSync(path.join(workflowsDir, f, 'SKILL.md'));
+          });
+          
+          if (installed.length > 0) {
+            console.log(chalk.gray(`\n   Installed workflows:`));
+            installed.forEach(w => console.log(chalk.gray(`     - ${w}`)));
+          }
+        }
+      } catch (e) {
+        console.log(chalk.red(`❌ Failed to read workflow: ${e}`));
+      }
+    } else {
+      // List installed workflows
+      console.log(chalk.blue('\n📋 Installed Workflows\n'));
+      
+      try {
+        const workflows: string[] = [];
+        
+        if (fs.existsSync(workflowsDir)) {
+          const entries = fs.readdirSync(workflowsDir);
+          for (const entry of entries) {
+            const workflowPath = path.join(workflowsDir, entry, 'SKILL.md');
+            if (fs.existsSync(workflowPath)) {
+              workflows.push(entry);
+            }
+          }
+        }
+        
+        if (workflows.length === 0) {
+          console.log(chalk.gray('  No workflows installed'));
+          console.log(chalk.gray('\n  Install workflows from GitHub:'));
+          console.log(chalk.white('    agentmux workflow <name> --install'));
+        } else {
+          workflows.forEach(w => {
+            console.log(`  ✓ ${chalk.bold(w)}`);
+          });
+          console.log(chalk.gray(`\n  View workflow: agentmux workflow <name>`));
+        }
+        
+        console.log(chalk.gray('\n  Available workflows on GitHub:'));
+        console.log(chalk.gray('    - detailed-commits'));
+        
+      } catch (e) {
+        console.log(chalk.red('❌ Failed to list workflows'));
+      }
+    }
+  });
+
+program
   .command('install-deps')
-  .description('Install all required dependencies (claude, opencode, jj, tmux, bun)')
+  .description('Install all required dependencies (claude, opencode, tmux, bun)')
   .action(() => {
     console.log(chalk.blue('🔧 Installing AgentMux dependencies...\n'));
 
@@ -583,7 +746,6 @@ program
       console.log(chalk.gray('   Please install manually:'));
       console.log(chalk.white('   - claude: npm install -g @anthropic-ai/claude-cli'));
       console.log(chalk.white('   - opencode: npm install -g opencode'));
-      console.log(chalk.white('   - jj: brew install jj'));
       console.log(chalk.white('   - tmux: brew install tmux'));
       console.log(chalk.white('   - bun: curl -fsSL https://bun.sh/install | bash'));
       return;
@@ -592,7 +754,6 @@ program
     const dependencies = [
       { name: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-cli' },
       { name: 'opencode', installCmd: 'npm install -g opencode' },
-      { name: 'jj', installCmd: 'brew install jj' },
       { name: 'tmux', installCmd: 'brew install tmux' },
       { name: 'bun', installCmd: 'curl -fsSL https://bun.sh/install | bash' }
     ];
@@ -631,7 +792,7 @@ program
     
     try {
       // Get pane info from tmux
-      const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
+      const output = execFileSync('tmux', ['list-panes', '-t', session, '-F', '#P: #{pane_current_command}'], { encoding: 'utf-8' });
       const paneCommands: {[key: string]: string} = {};
       
       if (output) {
@@ -652,7 +813,7 @@ program
       
       // Get spawned windows
       try {
-        const windowsOutput = exec(`tmux list-windows -t ${session} -F "#I: #W" 2>/dev/null`);
+        const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#I: #W'], { encoding: 'utf-8' });
         
         if (windowsOutput) {
           windowsOutput.trim().split('\n').forEach(line => {
@@ -700,7 +861,7 @@ program
     const session = getSessionName();
     
     try {
-      execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+      execFileSync('tmux', ['kill-session', '-t', session], { stdio: 'ignore' });
       console.log(chalk.green('\n✅ AgentMux session stopped\n'));
     } catch {
       console.log(chalk.yellow('\n⚠️  No active AgentMux session found\n'));
@@ -724,29 +885,31 @@ program
     
     // Check if session exists
     try {
-      execSync(`tmux has-session -t ${session} 2>/dev/null`);
+      execFileSync('tmux', ['has-session', '-t', session], { stdio: 'ignore' });
     } catch {
       console.log(chalk.red('\n❌ No active AgentMux session. Run: agentmux start\n'));
       return;
     }
     
-    // Check agent limit (max 11)
+    // Check agent limit (max 11) - count windows only
     try {
-      const windowCount = execSync(`tmux list-windows -t ${session} | wc -l`, { encoding: 'utf-8' });
-      const paneCount = execSync(`tmux list-panes -t ${session} | wc -l`, { encoding: 'utf-8' });
-      const totalAgents = parseInt(windowCount.trim()) + parseInt(paneCount.trim()) - 1; // -1 for main window
+      const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_name}'], { encoding: 'utf-8' });
+      const windowCount = windowsOutput.trim().split('\n').filter(w => w !== 'agentmux').length;
       
-      if (totalAgents >= MAX_AGENTS) {
+      if (windowCount >= MAX_AGENTS - AGENTS.length) {
         console.log(chalk.red(`\n❌ Agent limit reached (${MAX_AGENTS} max). Kill an agent first.\n`));
         return;
       }
     } catch {}
     
-    // Check if agent name already exists
+    // Check if agent name already exists (exact match)
     try {
-      execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
-      console.log(chalk.red(`\n❌ Agent "${agentName}" already exists\n`));
-      return;
+      const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_name}'], { encoding: 'utf-8' });
+      const windows = windowsOutput.trim().split('\n');
+      if (windows.includes(agentName)) {
+        console.log(chalk.red(`\n❌ Agent "${agentName}" already exists\n`));
+        return;
+      }
     } catch {
       // Name is available, continue
     }
@@ -755,11 +918,11 @@ program
     
     try {
       // Create new window with agent name
-      execSync(`tmux new-window -t ${session} -n "${agentName}"`);
+      execFileSync('tmux', ['new-window', '-t', session, '-n', agentName]);
       
       // Start the harness
       const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
-      execSync(`tmux send-keys -t ${session}:${agentName} "${cmd}" C-m`);
+      execFileSync('tmux', ['send-keys', '-t', `${session}:${agentName}`, cmd, 'C-m']);
       
       console.log(chalk.green(`✅ Agent "${agentName}" spawned successfully!`));
       console.log(chalk.gray(`   Window: ${agentName}`));
@@ -780,536 +943,42 @@ program
     
     // Check if session exists
     try {
-      execSync(`tmux has-session -t ${session} 2>/dev/null`);
+      execFileSync('tmux', ['has-session', '-t', session], { stdio: 'ignore' });
     } catch {
       console.log(chalk.red('\n❌ No active AgentMux session.\n'));
       return;
     }
     
     console.log(chalk.blue(`\n💀 Killing ${agentName}...`));
-    
+
     try {
-      // Check if it's a window
+      // Check if it's a window (exact match)
       try {
-        execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
-        // It's a window, kill it
-        execSync(`tmux kill-window -t ${session}:${agentName}`);
-        console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
-        return;
-      } catch {
-        // Not a window, check if it's a fixed pane agent
-        if (AGENT_PANE_MAP[agentName] !== undefined) {
-          // Kill the pane
-          execSync(`tmux kill-pane -t ${session}:0.${AGENT_PANE_MAP[agentName]}`);
+        const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_name}'], { encoding: 'utf-8' });
+        const windows = windowsOutput.trim().split('\n');
+        if (windows.includes(agentName)) {
+          // It's a window, kill it
+          execFileSync('tmux', ['kill-window', '-t', `${session}:${agentName}`]);
           console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
           return;
         }
-        
-        // Not found
-        console.log(chalk.red(`\n❌ Agent "${agentName}" not found\n`));
+      } catch {
+        // Not a window, continue to check fixed pane agents
       }
+
+      // Check if it's a fixed pane agent
+      if (AGENT_PANE_MAP[agentName] !== undefined) {
+        // Kill the pane
+        execFileSync('tmux', ['kill-pane', '-t', `${session}:0.${AGENT_PANE_MAP[agentName]}`]);
+        console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
+        return;
+      }
+
+      // Not found
+      console.log(chalk.red(`\n❌ Agent "${agentName}" not found\n`));
     } catch (e) {
       console.log(chalk.red(`\n❌ Failed to kill agent: ${e}\n`));
     }
   });
-
-// Memory subcommand
-const memoryProgram = new Command();
-memoryProgram
-  .name('memory')
-  .description('Structured expertise management for agents')
-  .version('1.0.0');
-
-memoryProgram
-  .command('init')
-  .description('Initialize agentmux memory storage')
-  .action(async () => {
-    const { existsSync } = await import('node:fs');
-    const { ensureExpertiseDir, readConfig, writeConfig, getExpertisePath } = await import('./memory/storage/config.ts');
-    const { createExpertiseFile } = await import('./memory/storage/store.ts');
-
-    await ensureExpertiseDir();
-    const config = await readConfig();
-
-    for (const domain of config.domains) {
-      const filePath = getExpertisePath(domain);
-      if (!existsSync(filePath)) {
-        await createExpertiseFile(filePath);
-      }
-    }
-
-    console.log(chalk.green('✓ Initialized agentmux memory storage'));
-    console.log(chalk.dim(`  Domains: ${config.domains.join(', ')}`));
-    console.log(chalk.dim(`  Storage: .agentmux/expertise/`));
-  });
-
-memoryProgram
-  .command('add')
-  .argument('<domain>', 'domain to add')
-  .description('Add a new expertise domain')
-  .action(async (domain: string) => {
-    const { ensureExpertiseDir, readConfig, writeConfig, getExpertisePath } = await import('./memory/storage/config.ts');
-    const { createExpertiseFile } = await import('./memory/storage/store.ts');
-    
-    await ensureExpertiseDir();
-    const config = await readConfig();
-    
-    if (config.domains.includes(domain)) {
-      console.log(chalk.yellow(`Domain "${domain}" already exists.`));
-      return;
-    }
-
-    config.domains.push(domain);
-    await writeConfig(config);
-
-    const filePath = getExpertisePath(domain);
-    await createExpertiseFile(filePath);
-
-    console.log(chalk.green(`✓ Added domain "${domain}"`));
-  });
-
-memoryProgram
-  .command('record')
-  .argument('<domain>', 'expertise domain')
-  .argument('[content]', 'record content')
-  .option('--type <type>', 'record type', 'convention')
-  .option('--classification <classification>', 'classification level', 'tactical')
-  .option('--description <description>', 'description of the record')
-  .option('--resolution <resolution>', 'resolution for failure records')
-  .option('--title <title>', 'title for decision records')
-  .option('--rationale <rationale>', 'rationale for decision records')
-  .option('--tags <tags>', 'comma-separated tags')
-  .option('--force', 'force recording even if duplicate exists')
-  .option('--dry-run', 'preview what would be recorded without writing')
-  .description('Record an expertise record')
-  .action(async (domain: string, content: string | undefined, options: any) => {
-    const { ensureExpertiseDir, getExpertisePath, readConfig, addDomain } = await import('./memory/storage/config.ts');
-    const { appendRecord, findDuplicate, readExpertiseFile } = await import('./memory/storage/store.ts');
-    const { ExpertiseRecord, RecordType, Classification } = await import('./memory/schema/types.ts');
-    
-    await ensureExpertiseDir();
-    const config = await readConfig();
-
-    if (!config.domains.includes(domain)) {
-      await addDomain(domain);
-      console.log(chalk.green(`✓ Auto-created domain "${domain}"`));
-    }
-
-    const recordedBy = process.env.AGENTMUX_AGENT || 'unknown';
-    const recordedAt = new Date().toISOString();
-
-    const tags = typeof options.tags === 'string'
-      ? options.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-      : undefined;
-
-    let record: ExpertiseRecord;
-
-    const recordType = options.type as RecordType;
-    const classification = (options.classification || 'tactical') as Classification;
-
-    switch (recordType) {
-      case 'convention': {
-        const conventionContent = content || options.description;
-        if (!conventionContent) {
-          console.error(chalk.red('Error: convention records require content or --description'));
-          process.exitCode = 1;
-          return;
-        }
-        record = {
-          type: 'convention',
-          content: conventionContent,
-          classification,
-          recorded_at: recordedAt,
-          recorded_by: recordedBy,
-          ...(tags && tags.length > 0 && { tags }),
-        };
-        break;
-      }
-      case 'failure': {
-        const failureDesc = options.description;
-        const failureResolution = options.resolution;
-        if (!failureDesc || !failureResolution) {
-          console.error(chalk.red('Error: failure records require --description and --resolution'));
-          process.exitCode = 1;
-          return;
-        }
-        record = {
-          type: 'failure',
-          description: failureDesc,
-          resolution: failureResolution,
-          classification,
-          recorded_at: recordedAt,
-          recorded_by: recordedBy,
-          ...(tags && tags.length > 0 && { tags }),
-        };
-        break;
-      }
-      case 'decision': {
-        const decisionTitle = options.title;
-        const decisionRationale = options.rationale;
-        if (!decisionTitle || !decisionRationale) {
-          console.error(chalk.red('Error: decision records require --title and --rationale'));
-          process.exitCode = 1;
-          return;
-        }
-        record = {
-          type: 'decision',
-          title: decisionTitle,
-          rationale: decisionRationale,
-          classification,
-          recorded_at: recordedAt,
-          recorded_by: recordedBy,
-          ...(tags && tags.length > 0 && { tags }),
-        };
-        break;
-      }
-      default:
-        console.error(chalk.red(`Error: Unknown record type "${recordType}"`));
-        process.exitCode = 1;
-        return;
-    }
-
-    const filePath = getExpertisePath(domain);
-    const dryRun = options.dryRun === true;
-
-    if (dryRun) {
-      const existing = await readExpertiseFile(filePath);
-      const dup = findDuplicate(existing, record);
-
-      if (dup && !options.force) {
-        console.log(chalk.yellow(`Dry-run: Duplicate ${recordType} already exists in ${domain}. Would skip.`));
-      } else {
-        console.log(chalk.green(`✓ Dry-run: Would create ${recordType} in ${domain}`));
-      }
-      console.log(chalk.dim('  Run without --dry-run to apply changes.'));
-    } else {
-      const existing = await readExpertiseFile(filePath);
-      const dup = findDuplicate(existing, record);
-
-      if (dup && !options.force) {
-        console.log(chalk.yellow(`Duplicate ${recordType} already exists in ${domain}. Use --force to add anyway.`));
-      } else {
-        await appendRecord(filePath, record);
-        console.log(chalk.green(`✓ Recorded ${recordType} in ${domain}`));
-      }
-    }
-  });
-
-memoryProgram
-  .command('query')
-  .argument('[domain]', 'expertise domain to query (or --all for all)')
-  .option('--type <type>', 'filter by record type')
-  .option('--classification <classification>', 'filter by classification')
-  .option('--plan <plan>', 'filter by plan reference (e.g., @sam/api-design)')
-  .option('--all', 'show all domains')
-  .description('Query expertise records (use --all to see all domains)')
-  .action(async (domain: string | undefined, options: any) => {
-    const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
-    const { readExpertiseFile, getFileModTime, filterByType, filterByClassification } = await import('./memory/storage/store.ts');
-
-    const config = await readConfig();
-    const domainsToQuery: string[] = [];
-
-    if (options.all) {
-      domainsToQuery.push(...config.domains);
-      if (domainsToQuery.length === 0) {
-        console.log('No domains configured. Run `am memory init` first.');
-        return;
-      }
-    } else if (domain) {
-      if (!config.domains.includes(domain)) {
-        console.error(chalk.red(`Error: Domain "${domain}" not found.`));
-        console.error(`Hint: Run \`am memory add ${domain}\` to create.`);
-        process.exitCode = 1;
-        return;
-      }
-      domainsToQuery.push(domain);
-    } else {
-      console.error(chalk.red('Error: Please specify a domain or use --all'));
-      process.exitCode = 1;
-      return;
-    }
-
-    function filterByPlan(records: ExpertiseRecord[], planRef: string): ExpertiseRecord[] {
-      return records.filter(r => r.plan_refs && r.plan_refs.some(ref => ref.includes(planRef)));
-    }
-
-    function formatRecord(r: ExpertiseRecord): string {
-      switch (r.type) {
-        case 'convention':
-          return `- ${r.content}`;
-        case 'failure':
-          return `- ${r.description}\n  → ${r.resolution}`;
-        case 'decision':
-          return `- **${r.title}**: ${r.rationale}`;
-      }
-    }
-
-    for (const d of domainsToQuery) {
-      const filePath = getExpertisePath(d);
-      let records = await readExpertiseFile(filePath);
-      const lastUpdated = await getFileModTime(filePath);
-
-      if (options.type) {
-        records = filterByType(records, options.type);
-      }
-      if (options.classification) {
-        records = filterByClassification(records, options.classification);
-      }
-      if (options.plan) {
-        records = filterByPlan(records, options.plan);
-      }
-
-      if (records.length > 0) {
-        console.log(`\n## ${d}`);
-        if (lastUpdated) {
-          const ago = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60));
-          console.log(`(${records.length} entries, updated ${ago}h ago)`);
-        }
-        
-        const byType = { convention: [] as ExpertiseRecord[], failure: [] as ExpertiseRecord[], decision: [] as ExpertiseRecord[] };
-        for (const r of records) {
-          byType[r.type].push(r);
-        }
-
-        if (byType.convention.length > 0) {
-          console.log('\n### Conventions');
-          for (const r of byType.convention) console.log(formatRecord(r));
-        }
-        if (byType.failure.length > 0) {
-          console.log('\n### Known Failures');
-          for (const r of byType.failure) console.log(formatRecord(r));
-        }
-        if (byType.decision.length > 0) {
-          console.log('\n### Decisions');
-          for (const r of byType.decision) console.log(formatRecord(r));
-        }
-      }
-    }
-  });
-
-memoryProgram
-  .command('prime')
-  .argument('[domains...]', 'domain(s) to include')
-  .option('--compact', 'condensed output (default)')
-  .option('--full', 'include full details')
-  .option('--exclude <domains...>', 'domains to exclude')
-  .description('Generate agent-optimized context for injection')
-  .action(async (domainsArg: string[] | undefined, options: any) => {
-    const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
-    const { readExpertiseFile, getFileModTime } = await import('./memory/storage/store.ts');
-
-    const config = await readConfig();
-    const excluded = options.exclude || [];
-    
-    let targetDomains = domainsArg && domainsArg.length > 0 
-      ? domainsArg.filter((d: string) => !excluded.includes(d))
-      : config.domains.filter((d: string) => !excluded.includes(d));
-
-    if (targetDomains.length === 0) {
-      console.log('No domains to prime.');
-      return;
-    }
-
-    const sections: string[] = [];
-
-    for (const domain of targetDomains) {
-      const filePath = getExpertisePath(domain);
-      const records = await readExpertiseFile(filePath);
-      const lastUpdated = await getFileModTime(filePath);
-
-      if (records.length === 0) continue;
-
-      const lines: string[] = [];
-      lines.push(`## ${domain}`);
-
-      const byType: Record<string, ExpertiseRecord[]> = {
-        convention: [],
-        failure: [],
-        decision: [],
-      };
-      for (const r of records) {
-        byType[r.type].push(r);
-      }
-
-      const formatCompact = (r: ExpertiseRecord): string => {
-        switch (r.type) {
-          case 'convention':
-            return `[convention] ${r.content}`;
-          case 'failure':
-            return `[failure] ${r.description} → ${r.resolution}`;
-          case 'decision':
-            return `[decision] ${r.title}: ${r.rationale}`;
-        }
-      };
-
-      const formatFull = (r: ExpertiseRecord): string => {
-        const meta = options.full 
-          ? ` (${r.classification}, ${r.recorded_by}, ${new Date(r.recorded_at).toLocaleDateString()})`
-          : '';
-        switch (r.type) {
-          case 'convention':
-            return `- ${r.content}${meta}`;
-          case 'failure':
-            return `- ${r.description}${meta}\n  → ${r.resolution}`;
-          case 'decision':
-            return `- **${r.title}**: ${r.rationale}${meta}`;
-        }
-      };
-
-      const formatter = options.full ? formatFull : formatCompact;
-
-      if (byType.convention.length > 0) {
-        lines.push('\n### Conventions');
-        for (const r of byType.convention) lines.push(formatter(r));
-      }
-      if (byType.failure.length > 0) {
-        lines.push('\n### Known Failures');
-        for (const r of byType.failure) lines.push(formatter(r));
-      }
-      if (byType.decision.length > 0) {
-        lines.push('\n### Decisions');
-        for (const r of byType.decision) lines.push(formatter(r));
-      }
-
-      sections.push(lines.join('\n'));
-    }
-
-    if (sections.length > 0) {
-      console.log('# AgentMux Memory Context\n');
-      console.log(sections.join('\n\n'));
-      console.log('\n---\n*Run `am memory query --all` to see full records. Record learnings with `am memory record`*');
-    } else {
-      console.log('No records found in specified domains.');
-    }
-  });
-
-memoryProgram
-  .command('status')
-  .description('Show memory status - record counts and last updated')
-  .action(async () => {
-    const { readConfig, getExpertisePath, getExpertiseDir } = await import('./memory/storage/config.ts');
-    const { readExpertiseFile, getFileModTime } = await import('./memory/storage/store.ts');
-
-    const config = await readConfig();
-    const expertiseDir = getExpertiseDir();
-
-    if (!existsSync(expertiseDir)) {
-      console.log(chalk.yellow('No .agentmux/expertise/ found. Run `am memory init` first.'));
-      return;
-    }
-
-    console.log(chalk.bold('\n# AgentMux Memory Status\n'));
-
-    let totalRecords = 0;
-
-    for (const domain of config.domains) {
-      const filePath = getExpertisePath(domain);
-      const records = await readExpertiseFile(filePath);
-      const lastUpdated = await getFileModTime(filePath);
-
-      totalRecords += records.length;
-
-      const countStr = chalk.white(`${records.length} records`);
-      let timeStr = chalk.gray('(no data)');
-      
-      if (lastUpdated) {
-        const ago = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60));
-        if (ago < 1) {
-          const mins = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60));
-          timeStr = chalk.gray(`(${mins}m ago)`);
-        } else if (ago < 24) {
-          timeStr = chalk.gray(`(${ago}h ago)`);
-        } else {
-          const days = Math.floor(ago / 24);
-          timeStr = chalk.gray(`(${days}d ago)`);
-        }
-      }
-
-      console.log(`  ${chalk.cyan(domain.padEnd(15))} ${countStr} ${timeStr}`);
-    }
-
-    console.log(chalk.dim(`\n  Total: ${totalRecords} records across ${config.domains.length} domains`));
-    console.log(chalk.dim(`  Storage: ${expertiseDir}\n`));
-  });
-
-program.addCommand(memoryProgram);
-
-// Plan subcommand
-const planProgram = new Command();
-planProgram
-  .name('plan')
-  .description('Versioned plan management for multi-agent collaboration')
-  .version('1.0.0');
-
-planProgram
-  .command('init')
-  .argument('<name>', 'plan name')
-  .description('Create a new plan')
-  .action(async (name: string) => {
-    const { initPlan } = await import('./plan/commands/init.ts');
-    await initPlan(name);
-  });
-
-planProgram
-  .command('list')
-  .description('List all plans')
-  .action(async () => {
-    const { listPlanCommand } = await import('./plan/commands/init.ts');
-    await listPlanCommand();
-  });
-
-planProgram
-  .command('commit')
-  .argument('<name>', 'plan name')
-  .option('-m, --message <message>', 'commit message')
-  .description('Commit current plan.md as new version')
-  .action(async (name: string, options: any) => {
-    const { commitPlan } = await import('./plan/commands/commit.ts');
-    const message = options.message || `Update ${name}`;
-    await commitPlan(name, message);
-  });
-
-planProgram
-  .command('log')
-  .argument('<name>', 'plan name')
-  .description('Show version history')
-  .action(async (name: string) => {
-    const { logPlan } = await import('./plan/commands/commit.ts');
-    await logPlan(name);
-  });
-
-planProgram
-  .command('show')
-  .argument('<name>', 'plan name')
-  .option('--with-memory', 'show linked memory records')
-  .description('Show current plan version')
-  .action(async (name: string, options: any) => {
-    if (options.withMemory) {
-      const { showPlanWithMemory } = await import('./plan/commands/link.ts');
-      await showPlanWithMemory(name);
-    } else {
-      const { showPlan } = await import('./plan/commands/commit.ts');
-      await showPlan(name);
-    }
-  });
-
-planProgram
-  .command('link')
-  .argument('<plan>', 'plan name')
-  .option('--memory <ref>', 'memory reference ID (e.g., am-8f2d)')
-  .option('--version <version>', 'specific version (default: current)')
-  .description('Link memory record to plan version')
-  .action(async (plan: string, options: any) => {
-    if (!options.memory) {
-      console.log(chalk.red("Error: --memory <ref> is required"));
-      console.log(chalk.gray("Example: am plan link api-design --memory am-8f2d"));
-      return;
-    }
-    const { linkMemory } = await import('./plan/commands/link.ts');
-    await linkMemory(plan, options.memory, options.version);
-  });
-
-program.addCommand(planProgram);
 
 program.parse();

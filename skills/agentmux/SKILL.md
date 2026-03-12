@@ -82,51 +82,63 @@ agentmux status
 | Ctrl+B d | Detach session |
 | Click | Switch panes |
 
+## Commit Tracking
+
+Track your work with commits (3-5 word descriptions):
+
+### Log a commit
+```bash
+agentmux commit <github-hash> "@agent: description"
+# Example: agentmux commit abc123 "@nui: implemented auth"
+# Shows as: ○ abc123 @nui: implemented auth
+```
+
+### Review a commit
+```bash
+agentmux review <hash>
+# Example: agentmux review abc123
+# Changes: ○ → ● and adds reviewer name
+```
+
+### View all commits
+```bash
+agentmux commits
+# or: agentmux log
+```
+
+### Clear commit history
+```bash
+agentmux clear-commits
+```
+
+## Workflows
+
+Install and use agent coordination workflows:
+
+### List available workflows
+```bash
+agentmux workflow
+```
+
+### Install a workflow
+```bash
+agentmux workflow detailed-commits --install
+```
+
+### View workflow documentation
+```bash
+agentmux workflow detailed-commits
+```
+
+**Available workflows:**
+- **detailed-commits** - Standard workflow for well-documented commits with full context (what, why, assumptions) and review coordination
+
 ## Quick Workflow
 
 1. `agentmux list` - Check who's online
 2. Work on task
-3. `agentmux send <agent> "message"` - Communicate
-4. `jj log` - Check what others committed
-5. `agentmux spawn opencode helper` - Add helpers if needed
-
-## Memory System
-
-AgentMux has a built-in memory system for structured expertise management.
-
-### Session Start
-
-At the beginning of each session, run:
-```bash
-am memory prime
-```
-This loads accumulated expertise (conventions, failures, decisions).
-
-### Recording Learnings
-
-Before finishing tasks, record insights:
-```bash
-# Convention
-am memory record project --type convention "Use Bun runtime for TypeScript"
-
-# Failure
-am memory record tasks --type failure --description "JJ divergence" --resolution "Run jj log first"
-
-# Decision
-am memory record decisions --type decision --title "JSONL storage" --rationale "Git-friendly"
-```
-
-### Other Commands
-
-```bash
-am memory init           # Initialize (one-time)
-am memory add <domain>  # Add domain
-am memory query --all   # Query all records
-am memory status        # Show counts
-```
-
-### Domains
-
-- **project** - Conventions and standards
-- **tasks** - Known failures and resolutions
-- **decisions** - Architectural decisions
+3. `agentmux commit abc123 "@nui: fixed bug"` - Log your work
+4. `agentmux send <agent> "message"` - Communicate
+5. `agentmux review def456` - Review others' work
+6. `agentmux commits` - Check recent work
+7. `agentmux spawn opencode helper` - Add helpers if needed

@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 // @bun
-import { createRequire } from "node:module";
 var __create = Object.create;
 var __getProtoOf = Object.getPrototypeOf;
 var __defProp = Object.defineProperty;
@@ -18,17 +17,7 @@ var __toESM = (mod, isNodeMode, target) => {
   return to;
 };
 var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, {
-      get: all[name],
-      enumerable: true,
-      configurable: true,
-      set: (newValue) => all[name] = () => newValue
-    });
-};
-var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
-var __require = /* @__PURE__ */ createRequire(import.meta.url);
+var __require = import.meta.require;
 
 // node_modules/commander/lib/error.js
 var require_error = __commonJS((exports) => {
@@ -353,7 +342,7 @@ var require_help = __commonJS((exports) => {
       return Math.max(helper.longestOptionTermLength(cmd, helper), helper.longestGlobalOptionTermLength(cmd, helper), helper.longestSubcommandTermLength(cmd, helper), helper.longestArgumentTermLength(cmd, helper));
     }
     wrap(str, width, indent, minColumnWidth = 40) {
-      const indents = " \\f\\t\\v   -   　\uFEFF";
+      const indents = " \\f\\t\\v\xA0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF";
       const manualIndent = new RegExp(`[\\n][${indents}]+`);
       if (str.match(manualIndent))
         return str;
@@ -365,7 +354,7 @@ var require_help = __commonJS((exports) => {
 `, `
 `);
       const indentString = " ".repeat(indent);
-      const zeroWidthSpace = "​";
+      const zeroWidthSpace = "\u200B";
       const breaks = `\\s${zeroWidthSpace}`;
       const regex = new RegExp(`
 |.{1,${columnWidth - 1}}([${breaks}]|$)|[^${breaks}]+?([${breaks}]|$)`, "g");
@@ -608,11 +597,11 @@ var require_suggestSimilar = __commonJS((exports) => {
 
 // node_modules/commander/lib/command.js
 var require_command = __commonJS((exports) => {
-  var EventEmitter = __require("node:events").EventEmitter;
-  var childProcess = __require("node:child_process");
-  var path = __require("node:path");
-  var fs = __require("node:fs");
-  var process2 = __require("node:process");
+  var EventEmitter = __require("events").EventEmitter;
+  var childProcess = __require("child_process");
+  var path = __require("path");
+  var fs = __require("fs");
+  var process2 = __require("process");
   var { Argument, humanReadableArgName } = require_argument();
   var { CommanderError } = require_error();
   var { Help } = require_help();
@@ -1869,7 +1858,84 @@ var require_commander = __commonJS((exports) => {
   exports.InvalidOptionArgumentError = InvalidArgumentError;
 });
 
+// node_modules/commander/esm.mjs
+var import__ = __toESM(require_commander(), 1);
+var {
+  program,
+  createCommand,
+  createArgument,
+  createOption,
+  CommanderError,
+  InvalidArgumentError,
+  InvalidOptionArgumentError,
+  Command,
+  Argument,
+  Option,
+  Help
+} = import__.default;
+
 // node_modules/chalk/source/vendor/ansi-styles/index.js
+var ANSI_BACKGROUND_OFFSET = 10;
+var wrapAnsi16 = (offset = 0) => (code) => `\x1B[${code + offset}m`;
+var wrapAnsi256 = (offset = 0) => (code) => `\x1B[${38 + offset};5;${code}m`;
+var wrapAnsi16m = (offset = 0) => (red, green, blue) => `\x1B[${38 + offset};2;${red};${green};${blue}m`;
+var styles = {
+  modifier: {
+    reset: [0, 0],
+    bold: [1, 22],
+    dim: [2, 22],
+    italic: [3, 23],
+    underline: [4, 24],
+    overline: [53, 55],
+    inverse: [7, 27],
+    hidden: [8, 28],
+    strikethrough: [9, 29]
+  },
+  color: {
+    black: [30, 39],
+    red: [31, 39],
+    green: [32, 39],
+    yellow: [33, 39],
+    blue: [34, 39],
+    magenta: [35, 39],
+    cyan: [36, 39],
+    white: [37, 39],
+    blackBright: [90, 39],
+    gray: [90, 39],
+    grey: [90, 39],
+    redBright: [91, 39],
+    greenBright: [92, 39],
+    yellowBright: [93, 39],
+    blueBright: [94, 39],
+    magentaBright: [95, 39],
+    cyanBright: [96, 39],
+    whiteBright: [97, 39]
+  },
+  bgColor: {
+    bgBlack: [40, 49],
+    bgRed: [41, 49],
+    bgGreen: [42, 49],
+    bgYellow: [43, 49],
+    bgBlue: [44, 49],
+    bgMagenta: [45, 49],
+    bgCyan: [46, 49],
+    bgWhite: [47, 49],
+    bgBlackBright: [100, 49],
+    bgGray: [100, 49],
+    bgGrey: [100, 49],
+    bgRedBright: [101, 49],
+    bgGreenBright: [102, 49],
+    bgYellowBright: [103, 49],
+    bgBlueBright: [104, 49],
+    bgMagentaBright: [105, 49],
+    bgCyanBright: [106, 49],
+    bgWhiteBright: [107, 49]
+  }
+};
+var modifierNames = Object.keys(styles.modifier);
+var foregroundColorNames = Object.keys(styles.color);
+var backgroundColorNames = Object.keys(styles.bgColor);
+var colorNames = [...foregroundColorNames, ...backgroundColorNames];
 function assembleStyles() {
   const codes = new Map;
   for (const [groupName, group] of Object.entries(styles)) {
@@ -1982,78 +2048,25 @@ function assembleStyles() {
   });
   return styles;
 }
-var ANSI_BACKGROUND_OFFSET = 10, wrapAnsi16 = (offset = 0) => (code) => `\x1B[${code + offset}m`, wrapAnsi256 = (offset = 0) => (code) => `\x1B[${38 + offset};5;${code}m`, wrapAnsi16m = (offset = 0) => (red, green, blue) => `\x1B[${38 + offset};2;${red};${green};${blue}m`, styles, modifierNames, foregroundColorNames, backgroundColorNames, colorNames, ansiStyles, ansi_styles_default;
-var init_ansi_styles = __esm(() => {
-  styles = {
-    modifier: {
-      reset: [0, 0],
-      bold: [1, 22],
-      dim: [2, 22],
-      italic: [3, 23],
-      underline: [4, 24],
-      overline: [53, 55],
-      inverse: [7, 27],
-      hidden: [8, 28],
-      strikethrough: [9, 29]
-    },
-    color: {
-      black: [30, 39],
-      red: [31, 39],
-      green: [32, 39],
-      yellow: [33, 39],
-      blue: [34, 39],
-      magenta: [35, 39],
-      cyan: [36, 39],
-      white: [37, 39],
-      blackBright: [90, 39],
-      gray: [90, 39],
-      grey: [90, 39],
-      redBright: [91, 39],
-      greenBright: [92, 39],
-      yellowBright: [93, 39],
-      blueBright: [94, 39],
-      magentaBright: [95, 39],
-      cyanBright: [96, 39],
-      whiteBright: [97, 39]
-    },
-    bgColor: {
-      bgBlack: [40, 49],
-      bgRed: [41, 49],
-      bgGreen: [42, 49],
-      bgYellow: [43, 49],
-      bgBlue: [44, 49],
-      bgMagenta: [45, 49],
-      bgCyan: [46, 49],
-      bgWhite: [47, 49],
-      bgBlackBright: [100, 49],
-      bgGray: [100, 49],
-      bgGrey: [100, 49],
-      bgRedBright: [101, 49],
-      bgGreenBright: [102, 49],
-      bgYellowBright: [103, 49],
-      bgBlueBright: [104, 49],
-      bgMagentaBright: [105, 49],
-      bgCyanBright: [106, 49],
-      bgWhiteBright: [107, 49]
-    }
-  };
-  modifierNames = Object.keys(styles.modifier);
-  foregroundColorNames = Object.keys(styles.color);
-  backgroundColorNames = Object.keys(styles.bgColor);
-  colorNames = [...foregroundColorNames, ...backgroundColorNames];
-  ansiStyles = assembleStyles();
-  ansi_styles_default = ansiStyles;
-});
+var ansiStyles = assembleStyles();
+var ansi_styles_default = ansiStyles;
 
 // node_modules/chalk/source/vendor/supports-color/index.js
-import process2 from "node:process";
-import os from "node:os";
-import tty from "node:tty";
+import process2 from "process";
+import os from "os";
+import tty from "tty";
 function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : process2.argv) {
   const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
   const position = argv.indexOf(prefix + flag);
   const terminatorPosition = argv.indexOf("--");
   return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+}
+var { env } = process2;
+var flagForceColor;
+if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never")) {
+  flagForceColor = 0;
+} else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always")) {
+  flagForceColor = 1;
 }
 function envForceColor() {
   if ("FORCE_COLOR" in env) {
@@ -2164,20 +2177,11 @@ function createSupportsColor(stream, options = {}) {
   });
   return translateLevel(level);
 }
-var env, flagForceColor, supportsColor, supports_color_default;
-var init_supports_color = __esm(() => {
-  ({ env } = process2);
-  if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never")) {
-    flagForceColor = 0;
-  } else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always")) {
-    flagForceColor = 1;
-  }
-  supportsColor = {
-    stdout: createSupportsColor({ isTTY: tty.isatty(1) }),
-    stderr: createSupportsColor({ isTTY: tty.isatty(2) })
-  };
-  supports_color_default = supportsColor;
-});
+var supportsColor = {
+  stdout: createSupportsColor({ isTTY: tty.isatty(1) }),
+  stderr: createSupportsColor({ isTTY: tty.isatty(2) })
+};
+var supports_color_default = supportsColor;
 
 // node_modules/chalk/source/utilities.js
 function stringReplaceAll(string, substring, replacer) {
@@ -2212,1155 +2216,7 @@ function stringEncaseCRLFWithFirstIndex(string, prefix, postfix, index) {
   return returnValue;
 }
 
-// src/memory/storage/config.ts
-var exports_config = {};
-__export(exports_config, {
-  writeConfig: () => writeConfig,
-  readConfig: () => readConfig,
-  getMulchDir: () => getMulchDir,
-  getExpertisePath: () => getExpertisePath,
-  getExpertiseDir: () => getExpertiseDir,
-  findAndSetAgentMuxDir: () => findAndSetAgentMuxDir,
-  ensureExpertiseDir: () => ensureExpertiseDir,
-  createExpertiseFile: () => createExpertiseFile2,
-  addDomain: () => addDomain
-});
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-function findAgentMuxDir(startDir = process.cwd()) {
-  let currentDir = startDir;
-  const root = "/";
-  while (currentDir !== root) {
-    const candidate = join(currentDir, ".agentmux");
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-    currentDir = dirname(currentDir);
-  }
-  return null;
-}
-function getAgentMuxDir() {
-  if (cachedAgentMuxDir) {
-    return cachedAgentMuxDir;
-  }
-  const found = findAgentMuxDir();
-  if (found) {
-    cachedAgentMuxDir = found;
-    return found;
-  }
-  const cwd = process.cwd();
-  const defaultDir = join(cwd, ".agentmux");
-  cachedAgentMuxDir = defaultDir;
-  return defaultDir;
-}
-function findAndSetAgentMuxDir(startDir) {
-  const found = findAgentMuxDir(startDir);
-  if (found) {
-    cachedAgentMuxDir = found;
-    return found;
-  }
-  throw new Error("No .agentmux/ directory found. Run 'am memory init' first.");
-}
-function getExpertiseDir() {
-  return EXPERTISE_DIR;
-}
-function getExpertisePath(domain) {
-  return join(EXPERTISE_DIR, `${domain}.jsonl`);
-}
-function getMulchDir() {
-  return AGENTMUX_DIR;
-}
-async function ensureExpertiseDir() {
-  const { mkdir } = await import("node:fs/promises");
-  if (!existsSync(EXPERTISE_DIR)) {
-    const agentMuxDir = getAgentMuxDir();
-    if (!existsSync(agentMuxDir)) {
-      await mkdir(agentMuxDir, { recursive: true });
-    }
-    await mkdir(EXPERTISE_DIR, { recursive: true });
-  }
-}
-async function readConfig() {
-  await ensureExpertiseDir();
-  try {
-    const content = readFileSync(CONFIG_PATH, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return DEFAULT_CONFIG;
-  }
-}
-async function writeConfig(config) {
-  await ensureExpertiseDir();
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
-}
-async function addDomain(domain) {
-  const config = await readConfig();
-  if (!config.domains.includes(domain)) {
-    config.domains.push(domain);
-    await writeConfig(config);
-  }
-  const { mkdir } = await import("node:fs/promises");
-  const filePath = getExpertisePath(domain);
-  if (!existsSync(filePath)) {
-    await createExpertiseFile(filePath);
-  }
-}
-var cachedAgentMuxDir = null, AGENTMUX_DIR, EXPERTISE_DIR, CONFIG_PATH, DEFAULT_CONFIG;
-var init_config = __esm(() => {
-  init_store();
-  AGENTMUX_DIR = getAgentMuxDir();
-  EXPERTISE_DIR = join(AGENTMUX_DIR, "expertise");
-  CONFIG_PATH = join(AGENTMUX_DIR, "config.json");
-  DEFAULT_CONFIG = {
-    domains: ["project", "tasks", "decisions"],
-    governance: {
-      max_entries: 100,
-      classification_defaults: {
-        shelf_life: {
-          tactical: 14,
-          observational: 30
-        }
-      }
-    }
-  };
-});
-
-// src/memory/storage/store.ts
-import { createHash } from "node:crypto";
-import {
-  appendFile,
-  readFile,
-  rename,
-  stat,
-  unlink,
-  writeFile
-} from "node:fs/promises";
-async function findAndUpdateMemoryPlanRef(memoryRef, planRef) {
-  const { readConfig: readConfig2 } = await Promise.resolve().then(() => (init_config(), exports_config));
-  const config = await readConfig2();
-  for (const domain of config.domains) {
-    const filePath = getExpertisePath(domain);
-    const records = await readExpertiseFile(filePath);
-    const record = findRecordById(records, memoryRef);
-    if (record) {
-      if (!record.plan_refs) {
-        record.plan_refs = [];
-      }
-      if (!record.plan_refs.includes(planRef)) {
-        record.plan_refs.push(planRef);
-        await writeExpertiseFile(filePath, records);
-      }
-      return true;
-    }
-  }
-  return false;
-}
-async function readExpertiseFile(filePath) {
-  let content;
-  try {
-    content = await readFile(filePath, ENCODING);
-  } catch {
-    return [];
-  }
-  const records = [];
-  const lines = content.split(`
-`).filter((line) => line.trim().length > 0);
-  for (const line of lines) {
-    records.push(JSON.parse(line));
-  }
-  return records;
-}
-function generateRecordId(record) {
-  let key;
-  switch (record.type) {
-    case "convention":
-      key = `convention:${record.content}`;
-      break;
-    case "failure":
-      key = `failure:${record.description}`;
-      break;
-    case "decision":
-      key = `decision:${record.title}`;
-      break;
-  }
-  return `am-${createHash("sha256").update(key).digest("hex").slice(0, 6)}`;
-}
-async function createExpertiseFile2(filePath) {
-  await writeFile(filePath, "", ENCODING);
-}
-async function writeExpertiseFile(filePath, records) {
-  for (const r of records) {
-    if (!r.id) {
-      r.id = generateRecordId(r);
-    }
-  }
-  const content = records.map((r) => JSON.stringify(r)).join(`
-`) + (records.length > 0 ? `
-` : "");
-  const tmpPath = `${filePath}.tmp.${Date.now()}`;
-  await writeFile(tmpPath, content, ENCODING);
-  try {
-    await rename(tmpPath, filePath);
-  } catch (err) {
-    try {
-      await unlink(tmpPath);
-    } catch {}
-    throw err;
-  }
-}
-function findRecordById(records, id) {
-  return records.find((r) => r.id === id) || null;
-}
-var ENCODING = "utf-8";
-var init_store = __esm(() => {
-  init_config();
-});
-
-// src/memory/storage/config.ts
-var exports_config2 = {};
-__export(exports_config2, {
-  writeConfig: () => writeConfig2,
-  readConfig: () => readConfig2,
-  getMulchDir: () => getMulchDir2,
-  getExpertisePath: () => getExpertisePath2,
-  getExpertiseDir: () => getExpertiseDir2,
-  findAndSetAgentMuxDir: () => findAndSetAgentMuxDir2,
-  ensureExpertiseDir: () => ensureExpertiseDir2,
-  createExpertiseFile: () => createExpertiseFile2,
-  addDomain: () => addDomain2
-});
-import { existsSync as existsSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname2, join as join2 } from "node:path";
-function findAgentMuxDir2(startDir = process.cwd()) {
-  let currentDir = startDir;
-  const root = "/";
-  while (currentDir !== root) {
-    const candidate = join2(currentDir, ".agentmux");
-    if (existsSync2(candidate)) {
-      return candidate;
-    }
-    currentDir = dirname2(currentDir);
-  }
-  return null;
-}
-function getAgentMuxDir2() {
-  if (cachedAgentMuxDir2) {
-    return cachedAgentMuxDir2;
-  }
-  const found = findAgentMuxDir2();
-  if (found) {
-    cachedAgentMuxDir2 = found;
-    return found;
-  }
-  const cwd = process.cwd();
-  const defaultDir = join2(cwd, ".agentmux");
-  cachedAgentMuxDir2 = defaultDir;
-  return defaultDir;
-}
-function findAndSetAgentMuxDir2(startDir) {
-  const found = findAgentMuxDir2(startDir);
-  if (found) {
-    cachedAgentMuxDir2 = found;
-    return found;
-  }
-  throw new Error("No .agentmux/ directory found. Run 'am memory init' first.");
-}
-function getExpertiseDir2() {
-  return EXPERTISE_DIR2;
-}
-function getExpertisePath2(domain) {
-  return join2(EXPERTISE_DIR2, `${domain}.jsonl`);
-}
-function getMulchDir2() {
-  return AGENTMUX_DIR2;
-}
-async function ensureExpertiseDir2() {
-  const { mkdir } = await import("node:fs/promises");
-  if (!existsSync2(EXPERTISE_DIR2)) {
-    const agentMuxDir = getAgentMuxDir2();
-    if (!existsSync2(agentMuxDir)) {
-      await mkdir(agentMuxDir, { recursive: true });
-    }
-    await mkdir(EXPERTISE_DIR2, { recursive: true });
-  }
-}
-async function readConfig2() {
-  await ensureExpertiseDir2();
-  try {
-    const content = readFileSync2(CONFIG_PATH2, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return DEFAULT_CONFIG2;
-  }
-}
-async function writeConfig2(config) {
-  await ensureExpertiseDir2();
-  writeFileSync2(CONFIG_PATH2, JSON.stringify(config, null, 2), "utf-8");
-}
-async function addDomain2(domain) {
-  const config = await readConfig2();
-  if (!config.domains.includes(domain)) {
-    config.domains.push(domain);
-    await writeConfig2(config);
-  }
-  const { mkdir } = await import("node:fs/promises");
-  const filePath = getExpertisePath2(domain);
-  if (!existsSync2(filePath)) {
-    await createExpertiseFile(filePath);
-  }
-}
-var cachedAgentMuxDir2 = null, AGENTMUX_DIR2, EXPERTISE_DIR2, CONFIG_PATH2, DEFAULT_CONFIG2;
-var init_config2 = __esm(() => {
-  init_store();
-  AGENTMUX_DIR2 = getAgentMuxDir2();
-  EXPERTISE_DIR2 = join2(AGENTMUX_DIR2, "expertise");
-  CONFIG_PATH2 = join2(AGENTMUX_DIR2, "config.json");
-  DEFAULT_CONFIG2 = {
-    domains: ["project", "tasks", "decisions"],
-    governance: {
-      max_entries: 100,
-      classification_defaults: {
-        shelf_life: {
-          tactical: 14,
-          observational: 30
-        }
-      }
-    }
-  };
-});
-
-// src/memory/storage/store.ts
-var exports_store = {};
-__export(exports_store, {
-  writeExpertiseFile: () => writeExpertiseFile2,
-  readExpertiseFile: () => readExpertiseFile2,
-  getFileModTime: () => getFileModTime,
-  generateRecordId: () => generateRecordId2,
-  findRecordById: () => findRecordById2,
-  findDuplicate: () => findDuplicate,
-  findAndUpdateMemoryPlanRef: () => findAndUpdateMemoryPlanRef2,
-  filterByType: () => filterByType,
-  filterByClassification: () => filterByClassification,
-  createExpertiseFile: () => createExpertiseFile3,
-  countRecords: () => countRecords,
-  appendRecord: () => appendRecord
-});
-import { createHash as createHash2 } from "node:crypto";
-import {
-  appendFile as appendFile2,
-  readFile as readFile2,
-  rename as rename2,
-  stat as stat2,
-  unlink as unlink2,
-  writeFile as writeFile2
-} from "node:fs/promises";
-async function findAndUpdateMemoryPlanRef2(memoryRef, planRef) {
-  const { readConfig: readConfig3 } = await Promise.resolve().then(() => (init_config(), exports_config));
-  const config = await readConfig3();
-  for (const domain of config.domains) {
-    const filePath = getExpertisePath(domain);
-    const records = await readExpertiseFile2(filePath);
-    const record = findRecordById2(records, memoryRef);
-    if (record) {
-      if (!record.plan_refs) {
-        record.plan_refs = [];
-      }
-      if (!record.plan_refs.includes(planRef)) {
-        record.plan_refs.push(planRef);
-        await writeExpertiseFile2(filePath, records);
-      }
-      return true;
-    }
-  }
-  return false;
-}
-async function readExpertiseFile2(filePath) {
-  let content;
-  try {
-    content = await readFile2(filePath, ENCODING2);
-  } catch {
-    return [];
-  }
-  const records = [];
-  const lines = content.split(`
-`).filter((line) => line.trim().length > 0);
-  for (const line of lines) {
-    records.push(JSON.parse(line));
-  }
-  return records;
-}
-function generateRecordId2(record) {
-  let key;
-  switch (record.type) {
-    case "convention":
-      key = `convention:${record.content}`;
-      break;
-    case "failure":
-      key = `failure:${record.description}`;
-      break;
-    case "decision":
-      key = `decision:${record.title}`;
-      break;
-  }
-  return `am-${createHash2("sha256").update(key).digest("hex").slice(0, 6)}`;
-}
-async function appendRecord(filePath, record) {
-  if (!record.id) {
-    record.id = generateRecordId2(record);
-  }
-  const line = `${JSON.stringify(record)}
-`;
-  await appendFile2(filePath, line, ENCODING2);
-}
-async function createExpertiseFile3(filePath) {
-  await writeFile2(filePath, "", ENCODING2);
-}
-async function getFileModTime(filePath) {
-  try {
-    const stats = await stat2(filePath);
-    return stats.mtime;
-  } catch {
-    return null;
-  }
-}
-async function writeExpertiseFile2(filePath, records) {
-  for (const r of records) {
-    if (!r.id) {
-      r.id = generateRecordId2(r);
-    }
-  }
-  const content = records.map((r) => JSON.stringify(r)).join(`
-`) + (records.length > 0 ? `
-` : "");
-  const tmpPath = `${filePath}.tmp.${Date.now()}`;
-  await writeFile2(tmpPath, content, ENCODING2);
-  try {
-    await rename2(tmpPath, filePath);
-  } catch (err) {
-    try {
-      await unlink2(tmpPath);
-    } catch {}
-    throw err;
-  }
-}
-function filterByType(records, type) {
-  return records.filter((r) => r.type === type);
-}
-function filterByClassification(records, classification) {
-  return records.filter((r) => r.classification === classification);
-}
-function findDuplicate(existing, newRecord) {
-  for (let i = 0;i < existing.length; i++) {
-    const record = existing[i];
-    if (record.type !== newRecord.type)
-      continue;
-    switch (record.type) {
-      case "convention":
-        if (newRecord.type === "convention" && record.content === newRecord.content) {
-          return { index: i, record };
-        }
-        break;
-      case "failure":
-        if (newRecord.type === "failure" && record.description === newRecord.description) {
-          return { index: i, record };
-        }
-        break;
-      case "decision":
-        if (newRecord.type === "decision" && record.title === newRecord.title) {
-          return { index: i, record };
-        }
-        break;
-    }
-  }
-  return null;
-}
-function countRecords(records) {
-  return records.length;
-}
-function findRecordById2(records, id) {
-  return records.find((r) => r.id === id) || null;
-}
-var ENCODING2 = "utf-8";
-var init_store2 = __esm(() => {
-  init_config();
-});
-
-// src/memory/schema/types.ts
-var exports_types = {};
-__export(exports_types, {
-  RECORD_TYPE_REQUIREMENTS: () => RECORD_TYPE_REQUIREMENTS
-});
-var RECORD_TYPE_REQUIREMENTS;
-var init_types = __esm(() => {
-  RECORD_TYPE_REQUIREMENTS = {
-    convention: "convention records require: content",
-    failure: "failure records require: description, resolution",
-    decision: "decision records require: title, rationale"
-  };
-});
-
 // node_modules/chalk/source/index.js
-function createChalk2(options) {
-  return chalkFactory2(options);
-}
-var stdoutColor2, stderrColor2, GENERATOR2, STYLER2, IS_EMPTY2, levelMapping2, styles3, applyOptions2 = (object, options = {}) => {
-  if (options.level && !(Number.isInteger(options.level) && options.level >= 0 && options.level <= 3)) {
-    throw new Error("The `level` option should be an integer from 0 to 3");
-  }
-  const colorLevel = stdoutColor2 ? stdoutColor2.level : 0;
-  object.level = options.level === undefined ? colorLevel : options.level;
-}, chalkFactory2 = (options) => {
-  const chalk2 = (...strings) => strings.join(" ");
-  applyOptions2(chalk2, options);
-  Object.setPrototypeOf(chalk2, createChalk2.prototype);
-  return chalk2;
-}, getModelAnsi2 = (model, level, type, ...arguments_) => {
-  if (model === "rgb") {
-    if (level === "ansi16m") {
-      return ansi_styles_default[type].ansi16m(...arguments_);
-    }
-    if (level === "ansi256") {
-      return ansi_styles_default[type].ansi256(ansi_styles_default.rgbToAnsi256(...arguments_));
-    }
-    return ansi_styles_default[type].ansi(ansi_styles_default.rgbToAnsi(...arguments_));
-  }
-  if (model === "hex") {
-    return getModelAnsi2("rgb", level, type, ...ansi_styles_default.hexToRgb(...arguments_));
-  }
-  return ansi_styles_default[type][model](...arguments_);
-}, usedModels2, proto2, createStyler2 = (open, close, parent) => {
-  let openAll;
-  let closeAll;
-  if (parent === undefined) {
-    openAll = open;
-    closeAll = close;
-  } else {
-    openAll = parent.openAll + open;
-    closeAll = close + parent.closeAll;
-  }
-  return {
-    open,
-    close,
-    openAll,
-    closeAll,
-    parent
-  };
-}, createBuilder2 = (self, _styler, _isEmpty) => {
-  const builder = (...arguments_) => applyStyle2(builder, arguments_.length === 1 ? "" + arguments_[0] : arguments_.join(" "));
-  Object.setPrototypeOf(builder, proto2);
-  builder[GENERATOR2] = self;
-  builder[STYLER2] = _styler;
-  builder[IS_EMPTY2] = _isEmpty;
-  return builder;
-}, applyStyle2 = (self, string) => {
-  if (self.level <= 0 || !string) {
-    return self[IS_EMPTY2] ? "" : string;
-  }
-  let styler = self[STYLER2];
-  if (styler === undefined) {
-    return string;
-  }
-  const { openAll, closeAll } = styler;
-  if (string.includes("\x1B")) {
-    while (styler !== undefined) {
-      string = stringReplaceAll(string, styler.close, styler.open);
-      styler = styler.parent;
-    }
-  }
-  const lfIndex = string.indexOf(`
-`);
-  if (lfIndex !== -1) {
-    string = stringEncaseCRLFWithFirstIndex(string, closeAll, openAll, lfIndex);
-  }
-  return openAll + string + closeAll;
-}, chalk2, chalkStderr2, source_default2;
-var init_source = __esm(() => {
-  init_ansi_styles();
-  init_supports_color();
-  ({ stdout: stdoutColor2, stderr: stderrColor2 } = supports_color_default);
-  GENERATOR2 = Symbol("GENERATOR");
-  STYLER2 = Symbol("STYLER");
-  IS_EMPTY2 = Symbol("IS_EMPTY");
-  levelMapping2 = [
-    "ansi",
-    "ansi",
-    "ansi256",
-    "ansi16m"
-  ];
-  styles3 = Object.create(null);
-  Object.setPrototypeOf(createChalk2.prototype, Function.prototype);
-  for (const [styleName, style] of Object.entries(ansi_styles_default)) {
-    styles3[styleName] = {
-      get() {
-        const builder = createBuilder2(this, createStyler2(style.open, style.close, this[STYLER2]), this[IS_EMPTY2]);
-        Object.defineProperty(this, styleName, { value: builder });
-        return builder;
-      }
-    };
-  }
-  styles3.visible = {
-    get() {
-      const builder = createBuilder2(this, this[STYLER2], true);
-      Object.defineProperty(this, "visible", { value: builder });
-      return builder;
-    }
-  };
-  usedModels2 = ["rgb", "hex", "ansi256"];
-  for (const model of usedModels2) {
-    styles3[model] = {
-      get() {
-        const { level } = this;
-        return function(...arguments_) {
-          const styler = createStyler2(getModelAnsi2(model, levelMapping2[level], "color", ...arguments_), ansi_styles_default.color.close, this[STYLER2]);
-          return createBuilder2(this, styler, this[IS_EMPTY2]);
-        };
-      }
-    };
-    const bgModel = "bg" + model[0].toUpperCase() + model.slice(1);
-    styles3[bgModel] = {
-      get() {
-        const { level } = this;
-        return function(...arguments_) {
-          const styler = createStyler2(getModelAnsi2(model, levelMapping2[level], "bgColor", ...arguments_), ansi_styles_default.bgColor.close, this[STYLER2]);
-          return createBuilder2(this, styler, this[IS_EMPTY2]);
-        };
-      }
-    };
-  }
-  proto2 = Object.defineProperties(() => {}, {
-    ...styles3,
-    level: {
-      enumerable: true,
-      get() {
-        return this[GENERATOR2].level;
-      },
-      set(level) {
-        this[GENERATOR2].level = level;
-      }
-    }
-  });
-  Object.defineProperties(createChalk2.prototype, styles3);
-  chalk2 = createChalk2();
-  chalkStderr2 = createChalk2({ level: stderrColor2 ? stderrColor2.level : 0 });
-  source_default2 = chalk2;
-});
-
-// src/plan/storage/config.ts
-import { existsSync as existsSync3, mkdirSync } from "node:fs";
-import { join as join3, dirname as dirname3 } from "node:path";
-function findAgentMuxDir3(startDir = process.cwd()) {
-  let currentDir = startDir;
-  const root = "/";
-  while (currentDir !== root) {
-    const candidate = join3(currentDir, ".agentmux");
-    if (existsSync3(candidate)) {
-      return candidate;
-    }
-    currentDir = dirname3(currentDir);
-  }
-  return null;
-}
-function getAgentMuxDir3() {
-  if (cachedAgentMuxDir3) {
-    return cachedAgentMuxDir3;
-  }
-  const found = findAgentMuxDir3();
-  if (found) {
-    cachedAgentMuxDir3 = found;
-    return found;
-  }
-  const cwd = process.cwd();
-  const defaultDir = join3(cwd, ".agentmux");
-  cachedAgentMuxDir3 = defaultDir;
-  return defaultDir;
-}
-function getPlansDir() {
-  return PLANS_DIR;
-}
-function getPlanDir(name) {
-  return join3(PLANS_DIR, name);
-}
-function getManifestPath(planName) {
-  return join3(PLANS_DIR, planName, "manifest.jsonl");
-}
-function getVersionPath(planName, version, hash) {
-  return join3(PLANS_DIR, planName, `v${version}-${hash}.md`);
-}
-function getCurrentSymlinkPath(planName) {
-  return join3(PLANS_DIR, planName, "current.md");
-}
-function ensurePlansDir() {
-  if (!existsSync3(PLANS_DIR)) {
-    mkdirSync(PLANS_DIR, { recursive: true });
-  }
-}
-function ensurePlanDir(name) {
-  const planDir = getPlanDir(name);
-  if (!existsSync3(planDir)) {
-    mkdirSync(planDir, { recursive: true });
-  }
-}
-function getAgentName() {
-  return process.env.AGENTMUX_AGENT || "unknown";
-}
-var cachedAgentMuxDir3 = null, AGENTMUX_DIR3, PLANS_DIR;
-var init_config3 = __esm(() => {
-  AGENTMUX_DIR3 = getAgentMuxDir3();
-  PLANS_DIR = join3(AGENTMUX_DIR3, "plans");
-});
-
-// src/plan/storage/util.ts
-import { renameSync, unlinkSync, writeFileSync as writeFileSync3 } from "node:fs";
-function atomicWrite(path, content) {
-  const tmpPath = `${path}.tmp.${Date.now()}`;
-  writeFileSync3(tmpPath, content, "utf-8");
-  try {
-    renameSync(tmpPath, path);
-  } catch (err) {
-    try {
-      unlinkSync(tmpPath);
-    } catch {}
-    throw err;
-  }
-}
-var init_util = () => {};
-
-// src/plan/storage/registry.ts
-import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "node:fs";
-function getIndexPath() {
-  return `${getPlansDir()}/index.jsonl`;
-}
-function ensureIndex() {
-  ensurePlansDir();
-  const indexPath = getIndexPath();
-  if (!existsSync4(indexPath)) {
-    writeFileSync4(indexPath, "", "utf-8");
-  }
-}
-function readIndex() {
-  ensureIndex();
-  const indexPath = getIndexPath();
-  const content = readFileSync3(indexPath, "utf-8");
-  if (!content.trim())
-    return [];
-  const entries = [];
-  const lines = content.trim().split(`
-`);
-  for (const line of lines) {
-    try {
-      entries.push(JSON.parse(line));
-    } catch {}
-  }
-  return entries;
-}
-function writeIndex(entries) {
-  const indexPath = getIndexPath();
-  const content = entries.map((e) => JSON.stringify(e)).join(`
-`) + `
-`;
-  atomicWrite(indexPath, content);
-}
-function listPlans() {
-  return readIndex();
-}
-function getPlan(name) {
-  const entries = readIndex();
-  const exact = entries.find((e) => e.name === name);
-  if (exact)
-    return exact;
-  const parts = name.split("/");
-  const shortName = parts[parts.length - 1];
-  return entries.find((e) => {
-    const eParts = e.name.split("/");
-    const eShortName = eParts[eParts.length - 1];
-    return eShortName === shortName || e.name.endsWith(name);
-  });
-}
-function planExists(name) {
-  return getPlan(name) !== undefined;
-}
-function createPlan(name) {
-  const entries = readIndex();
-  const existing = entries.find((e) => e.name === name);
-  if (existing) {
-    throw new Error(`Plan '${name}' already exists`);
-  }
-  const agentName = getAgentName();
-  const fullName = name.startsWith("@") ? name : `@${agentName}/${name}`;
-  const entry = {
-    name: fullName,
-    creator: agentName,
-    created_at: new Date().toISOString(),
-    path: `plans/${fullName}`
-  };
-  entries.push(entry);
-  writeIndex(entries);
-  return entry;
-}
-var init_registry = __esm(() => {
-  init_config3();
-  init_util();
-});
-
-// src/plan/commands/init.ts
-var exports_init = {};
-__export(exports_init, {
-  listPlanCommand: () => listPlanCommand,
-  initPlan: () => initPlan
-});
-async function initPlan(name) {
-  ensurePlansDir();
-  if (planExists(name)) {
-    console.log(source_default2.yellow(`Plan '${name}' already exists`));
-    return;
-  }
-  const entry = createPlan(name);
-  ensurePlanDir(entry.name);
-  console.log(source_default2.green(`✓ Created plan '${entry.name}'`));
-  console.log(source_default2.gray(`  Creator: ${entry.creator}`));
-  console.log(source_default2.gray(`  Created: ${new Date(entry.created_at).toLocaleString()}`));
-  console.log(source_default2.gray(`  Path: ${entry.path}/`));
-  console.log();
-  console.log(source_default2.cyan("Next steps:"));
-  console.log(source_default2.gray(`  1. Create your initial plan content`));
-  console.log(source_default2.gray(`  2. Run: am plan commit ${name} -m "Initial plan"`));
-}
-async function listPlanCommand() {
-  const plans = listPlans();
-  if (plans.length === 0) {
-    console.log(source_default2.yellow("No plans found. Create one with: am plan init <name>"));
-    return;
-  }
-  console.log(source_default2.bold(`
-Plans:
-`));
-  plans.forEach((plan) => {
-    console.log(source_default2.cyan(`  ${plan.name}`));
-    console.log(source_default2.gray(`    creator: ${plan.creator}`));
-    console.log(source_default2.gray(`    created: ${new Date(plan.created_at).toLocaleString()}`));
-    console.log();
-  });
-}
-var init_init = __esm(() => {
-  init_source();
-  init_registry();
-  init_config3();
-});
-
-// src/plan/storage/manifest.ts
-import { existsSync as existsSync5, readFileSync as readFileSync4, symlinkSync, unlinkSync as unlinkSync2 } from "node:fs";
-import { createHash as createHash3 } from "node:crypto";
-function readManifest(planName) {
-  const manifestPath = getManifestPath(planName);
-  if (!existsSync5(manifestPath))
-    return [];
-  const content = readFileSync4(manifestPath, "utf-8");
-  if (!content.trim())
-    return [];
-  const entries = [];
-  const lines = content.trim().split(`
-`);
-  for (const line of lines) {
-    try {
-      entries.push(JSON.parse(line));
-    } catch {}
-  }
-  return entries;
-}
-function writeManifest(planName, entries) {
-  ensurePlanDir(planName);
-  const manifestPath = getManifestPath(planName);
-  const content = entries.map((e) => JSON.stringify(e)).join(`
-`) + `
-`;
-  atomicWrite(manifestPath, content);
-}
-function getVersionHistory(planName) {
-  return readManifest(planName);
-}
-function getLatestVersion(planName) {
-  const history = readManifest(planName);
-  if (history.length === 0)
-    return null;
-  return history[history.length - 1];
-}
-function getVersion(planName, version) {
-  const history = readManifest(planName);
-  return history.find((e) => e.version === version) || null;
-}
-function addVersion(planName, message, content) {
-  const history = readManifest(planName);
-  const latest = history.length > 0 ? history[history.length - 1] : null;
-  const versionNum = history.length + 1;
-  const hash = generateHash(content);
-  const entry = {
-    version: `v${versionNum}`,
-    hash,
-    parent: latest ? latest.version : null,
-    message,
-    created_at: new Date().toISOString(),
-    created_by: getAgentName(),
-    memory_refs: []
-  };
-  history.push(entry);
-  writeManifest(planName, history);
-  return entry;
-}
-function generateHash(content) {
-  return createHash3("sha256").update(content).digest("hex").slice(0, 8);
-}
-function addMemoryRef(planName, version, memoryRef) {
-  const history = readManifest(planName);
-  const entry = history.find((e) => e.version === version);
-  if (!entry) {
-    throw new Error(`Version ${version} not found in plan ${planName}`);
-  }
-  if (!entry.memory_refs.includes(memoryRef)) {
-    entry.memory_refs.push(memoryRef);
-    writeManifest(planName, history);
-  }
-}
-function updateCurrentSymlink(planName, version, hash) {
-  const planDir = getPlanDir(planName);
-  const versionFile = `v${version}-${hash}.md`;
-  const symlinkPath = getCurrentSymlinkPath(planName);
-  if (existsSync5(symlinkPath)) {
-    unlinkSync2(symlinkPath);
-  }
-  symlinkSync(versionFile, symlinkPath);
-}
-var init_manifest = __esm(() => {
-  init_config3();
-  init_util();
-});
-
-// src/plan/commands/commit.ts
-var exports_commit = {};
-__export(exports_commit, {
-  showPlan: () => showPlan,
-  logPlan: () => logPlan,
-  commitPlan: () => commitPlan
-});
-import { existsSync as existsSync6, readFileSync as readFileSync5, writeFileSync as writeFileSync5 } from "node:fs";
-async function commitPlan(name, message) {
-  const plan = getPlan(name);
-  if (!plan) {
-    console.log(source_default2.red(`Plan '${name}' not found`));
-    console.log(source_default2.gray("Create it with: am plan init <name>"));
-    return;
-  }
-  const planDir = getPlanDir(plan.name);
-  const draftPath = `${planDir}/draft.md`;
-  const rootPlanPath = `${process.cwd()}/plan.md`;
-  let content;
-  let sourcePath;
-  if (existsSync6(draftPath)) {
-    sourcePath = draftPath;
-    content = readFileSync5(draftPath, "utf-8");
-  } else if (existsSync6(rootPlanPath)) {
-    sourcePath = rootPlanPath;
-    content = readFileSync5(rootPlanPath, "utf-8");
-  } else {
-    console.log(source_default2.red("No plan content found"));
-    console.log(source_default2.gray("Create draft.md in plan dir or plan.md in project root"));
-    return;
-  }
-  const entry = addVersion(plan.name, message, content);
-  const versionPath = getVersionPath(plan.name, entry.version, entry.hash);
-  writeFileSync5(versionPath, content, "utf-8");
-  try {
-    updateCurrentSymlink(plan.name, entry.version, entry.hash);
-  } catch {
-    console.log(source_default2.yellow("⚠ Could not create current.md symlink (Windows?)"));
-  }
-  console.log(source_default2.green(`✓ Committed ${entry.version}-${entry.hash}`));
-  console.log(source_default2.gray(`  Message: ${message}`));
-  console.log(source_default2.gray(`  Source: ${sourcePath}`));
-}
-async function logPlan(name) {
-  const plan = getPlan(name);
-  if (!plan) {
-    console.log(source_default2.red(`Plan '${name}' not found`));
-    return;
-  }
-  const history = getVersionHistory(plan.name);
-  if (history.length === 0) {
-    console.log(source_default2.yellow("No versions yet. Commit with: am plan commit <name> -m <message>"));
-    return;
-  }
-  console.log(source_default2.bold(`
-Plan: ${plan.name}
-`));
-  for (let i = history.length - 1;i >= 0; i--) {
-    const entry = history[i];
-    const time = new Date(entry.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const memoryCount = entry.memory_refs.length > 0 ? ` (${entry.memory_refs.length} memories)` : "";
-    console.log(source_default2.cyan(`  ${entry.version}-${entry.hash}  ${time}`));
-    console.log(source_default2.gray(`    ${entry.message}${memoryCount}`));
-    if (entry.parent) {
-      console.log(source_default2.gray(`    parent: ${entry.parent}`));
-    }
-    console.log(source_default2.gray(`    by: @${entry.created_by}`));
-    console.log();
-  }
-}
-async function showPlan(name) {
-  const plan = getPlan(name);
-  if (!plan) {
-    console.log(source_default2.red(`Plan '${name}' not found`));
-    return;
-  }
-  const latest = getLatestVersion(plan.name);
-  if (!latest) {
-    console.log(source_default2.yellow("No versions yet. Commit with: am plan commit <name> -m <message>"));
-    return;
-  }
-  const versionPath = getVersionPath(plan.name, latest.version, latest.hash);
-  if (!existsSync6(versionPath)) {
-    console.log(source_default2.red(`Version file not found: ${versionPath}`));
-    return;
-  }
-  const content = readFileSync5(versionPath, "utf-8");
-  console.log(source_default2.bold(`
-${plan.name} - ${latest.version}
-`));
-  console.log(source_default2.gray(`Hash: ${latest.hash}`));
-  console.log(source_default2.gray(`Message: ${latest.message}`));
-  console.log(source_default2.gray(`Created: ${new Date(latest.created_at).toLocaleString()}`));
-  if (latest.memory_refs.length > 0) {
-    console.log(source_default2.gray(`Memory refs: ${latest.memory_refs.join(", ")}`));
-  }
-  console.log(source_default2.bold(`
----
-`));
-  console.log(content);
-}
-var init_commit = __esm(() => {
-  init_source();
-  init_registry();
-  init_manifest();
-  init_config3();
-});
-
-// src/plan/commands/link.ts
-var exports_link = {};
-__export(exports_link, {
-  showPlanWithMemory: () => showPlanWithMemory,
-  linkMemory: () => linkMemory
-});
-import { existsSync as existsSync7, readFileSync as readFileSync6 } from "node:fs";
-async function resolveMemoryRecord(memoryRef) {
-  const config = await readConfig();
-  for (const domain of config.domains) {
-    const filePath = getExpertisePath(domain);
-    const records = await readExpertiseFile(filePath);
-    const record = records.find((r) => r.id === memoryRef);
-    if (record) {
-      switch (record.type) {
-        case "convention":
-          return `[${domain}] ${record.content}`;
-        case "failure":
-          return `[${domain}] ${record.description} → ${record.resolution}`;
-        case "decision":
-          return `[${domain}] ${record.title}: ${record.rationale}`;
-      }
-    }
-  }
-  return null;
-}
-async function linkMemory(planName, memoryRef, version) {
-  const plan = getPlan(planName);
-  if (!plan) {
-    console.log(source_default2.red(`Plan '${planName}' not found`));
-    return;
-  }
-  let targetVersion = version;
-  if (!targetVersion) {
-    const latest = getLatestVersion(plan.name);
-    if (!latest) {
-      console.log(source_default2.red("No versions in this plan. Commit first with: am plan commit"));
-      return;
-    }
-    targetVersion = latest.version;
-  }
-  const versionEntry = getVersion(plan.name, targetVersion);
-  if (!versionEntry) {
-    console.log(source_default2.red(`Version '${targetVersion}' not found in plan '${planName}'`));
-    return;
-  }
-  addMemoryRef(plan.name, targetVersion, memoryRef);
-  const planRef = `${plan.name}:${targetVersion}`;
-  await findAndUpdateMemoryPlanRef(memoryRef, planRef);
-  console.log(source_default2.green(`✓ Linked ${memoryRef} to ${planRef} (bidirectional)`));
-}
-async function showPlanWithMemory(name) {
-  const plan = getPlan(name);
-  if (!plan) {
-    console.log(source_default2.red(`Plan '${name}' not found`));
-    return;
-  }
-  const latest = getLatestVersion(plan.name);
-  if (!latest) {
-    console.log(source_default2.yellow("No versions yet. Commit with: am plan commit <name> -m <message>"));
-    return;
-  }
-  const versionPath = `${getPlanDir(plan.name)}/v${latest.version}-${latest.hash}.md`;
-  if (!existsSync7(versionPath)) {
-    console.log(source_default2.red(`Version file not found: ${versionPath}`));
-    return;
-  }
-  const content = readFileSync6(versionPath, "utf-8");
-  console.log(source_default2.bold(`
-${plan.name} - ${latest.version}
-`));
-  console.log(source_default2.gray(`Hash: ${latest.hash}`));
-  console.log(source_default2.gray(`Message: ${latest.message}`));
-  console.log(source_default2.gray(`Created: ${new Date(latest.created_at).toLocaleString()}`));
-  if (latest.memory_refs.length > 0) {
-    console.log(source_default2.cyan(`
-Linked Memories (${latest.memory_refs.length}):`));
-    for (const ref of latest.memory_refs) {
-      const resolved = await resolveMemoryRecord(ref);
-      if (resolved) {
-        console.log(source_default2.gray(`  • ${ref}: ${resolved}`));
-      } else {
-        console.log(source_default2.gray(`  • ${ref} (not found)`));
-      }
-    }
-  }
-  console.log(source_default2.bold(`
----
-`));
-  console.log(content);
-}
-var init_link = __esm(() => {
-  init_source();
-  init_registry();
-  init_manifest();
-  init_config3();
-  init_store();
-  init_config();
-});
-
-// node_modules/commander/esm.mjs
-var import__ = __toESM(require_commander(), 1);
-var {
-  program,
-  createCommand,
-  createArgument,
-  createOption,
-  CommanderError,
-  InvalidArgumentError,
-  InvalidOptionArgumentError,
-  Command,
-  Argument,
-  Option,
-  Help
-} = import__.default;
-
-// node_modules/chalk/source/index.js
-init_ansi_styles();
-init_supports_color();
 var { stdout: stdoutColor, stderr: stderrColor } = supports_color_default;
 var GENERATOR = Symbol("GENERATOR");
 var STYLER = Symbol("STYLER");
@@ -3508,28 +2364,21 @@ var chalkStderr = createChalk({ level: stderrColor ? stderrColor.level : 0 });
 var source_default = chalk;
 
 // src/index.ts
-import { spawn, execFileSync } from "child_process";
-import { execSync } from "child_process";
-import fs, { existsSync as existsSync8 } from "fs";
+import { spawn, execFileSync, execSync } from "child_process";
+import fs from "fs";
 import path from "path";
-import crypto from "crypto";
 var program2 = new Command;
 var MAX_AGENTS = 11;
 var STATUS_REFRESH_INTERVAL_MS = 3000;
-var STATUS_REFRESH_INTERVAL_S = 3;
+var STATUS_REFRESH_INTERVAL_S = STATUS_REFRESH_INTERVAL_MS / 1000;
 var AGENTS = [
-  { name: "status", pane: 0, harness: "monitor", cmd: "", enabled: true },
-  { name: "nui", pane: 1, harness: "opencode", cmd: "opencode", enabled: true },
-  { name: "sam", pane: 2, harness: "opencode", cmd: "opencode", enabled: true },
-  { name: "wit", pane: 3, harness: "claude", cmd: "claude", enabled: true }
+  { name: "status", pane: 0, harness: "monitor", cmd: "" },
+  { name: "nui", pane: 1, harness: "opencode", cmd: "opencode" },
+  { name: "sam", pane: 2, harness: "opencode", cmd: "opencode" },
+  { name: "wit", pane: 3, harness: "claude", cmd: "claude" }
 ];
-var AGENT_PANE_MAP = {
-  status: 0,
-  nui: 1,
-  sam: 2,
-  wit: 3
-};
-function getAgentMuxDir4() {
+var AGENT_PANE_MAP = Object.fromEntries(AGENTS.filter((a) => a.name !== "status").map((a) => [a.name, a.pane]));
+function getAgentMuxDir() {
   return path.join(process.cwd(), ".agentmux");
 }
 function exec(cmd, options = {}) {
@@ -3548,47 +2397,23 @@ function checkTmux() {
     return false;
   }
 }
-function checkJJ() {
-  try {
-    execSync("which jj");
-    return true;
-  } catch {
-    console.log(source_default.yellow("\u26A0\uFE0F  jj not found. Install with: cargo install jj-cli"));
-    return false;
-  }
-}
 function getSessionName() {
   return process.env.AGENTMUX_SESSION || "agentmux";
 }
-function getJJStateHash(agentMuxDir) {
-  try {
-    const jjDir = path.join(agentMuxDir, ".jj");
-    fs.accessSync(jjDir, fs.constants.F_OK);
-    const projectRoot = path.dirname(agentMuxDir);
-    const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
-      cwd: projectRoot,
-      encoding: "utf-8"
-    });
-    return crypto.createHash("md5").update(log).digest("hex");
-  } catch {
-    return "no-repo";
-  }
-}
 program2.name("agentmux").description("Ultra-lean multi-agent terminal multiplexer").version("3.0.0");
-program2.command("install").description("Install required dependencies (jj, tmux)").action(() => {
+program2.command("install").description("Install required dependencies (tmux)").action(() => {
   console.log(source_default.blue(`\uD83D\uDD27 Installing AgentMux dependencies...
 `));
   const platform = process.platform;
   let installCmd = "";
   if (platform === "darwin") {
     console.log(source_default.gray("Detected macOS"));
-    installCmd = "brew install jj tmux";
+    installCmd = "brew install tmux";
   } else if (platform === "linux") {
     console.log(source_default.gray("Detected Linux"));
-    installCmd = "cargo install jj-cli && sudo apt-get install -y tmux";
+    installCmd = "sudo apt-get install -y tmux";
   } else {
     console.log(source_default.yellow("\u26A0\uFE0F  Unsupported platform. Please install manually:"));
-    console.log(source_default.white("   JJ: cargo install jj-cli"));
     console.log(source_default.white("   tmux: https://github.com/tmux/tmux/wiki/Installing"));
     return;
   }
@@ -3606,12 +2431,11 @@ You can now run:`));
     console.log(source_default.red(`
 \u274C Installation failed`));
     console.log(source_default.gray("Try installing manually:"));
-    console.log(source_default.white("   JJ: cargo install jj-cli"));
     console.log(source_default.white("   tmux: brew install tmux (macOS) or apt-get install tmux (Linux)"));
   }
 });
 program2.command("init").description("Initialize a new AgentMux project in current directory").action(() => {
-  const agentMuxDir = getAgentMuxDir4();
+  const agentMuxDir = getAgentMuxDir();
   const currentDir = process.cwd();
   const name = path.basename(currentDir);
   console.log(source_default.blue(`\uD83C\uDF0A Initializing AgentMux project: ${name}`));
@@ -3626,18 +2450,7 @@ program2.command("init").description("Initialize a new AgentMux project in curre
   } catch {}
   fs.mkdirSync(agentMuxDir, { recursive: true });
   fs.mkdirSync(path.join(agentMuxDir, "shared"), { recursive: true });
-  fs.mkdirSync(path.join(agentMuxDir, "skills"), { recursive: true });
-  if (checkJJ()) {
-    try {
-      execSync("jj git init", { cwd: agentMuxDir });
-      console.log(source_default.green("  \u2713 JJ initialized in .agentmux/.jj/"));
-    } catch (e) {
-      console.log(source_default.yellow("  \u26A0\uFE0F  Failed to initialize JJ"));
-    }
-  } else {
-    console.log(source_default.yellow(`
-\u26A0\uFE0F  JJ not installed. Install with: brew install jj`));
-  }
+  fs.mkdirSync(path.join(agentMuxDir, "workflows"), { recursive: true });
   fs.writeFileSync(path.join(agentMuxDir, "shared", "plan.md"), `# Plan for ${name}
 
 Add your multi-agent plan here.
@@ -3660,23 +2473,21 @@ Review and test the implementation
   console.log(source_default.gray(`
 Directory structure:`));
   console.log(source_default.white("   .agentmux/"));
-  console.log(source_default.white("   \u251C\u2500\u2500 .jj/              # JJ version control"));
-  console.log(source_default.white("   \u2514\u2500\u2500 shared/           # Shared context"));
+  console.log(source_default.white("   \u251C\u2500\u2500 shared/           # Shared context"));
+  console.log(source_default.white("   \u2514\u2500\u2500 workflows/        # Agent workflows"));
   console.log(source_default.gray(`
 Skills are installed globally in ~/.claude/skills/`));
   console.log(source_default.gray(`Next step: agentmux start`));
 });
-program2.command("start").description("Start full AgentMux environment with 4 panes").option("--nui", "Enable nui agent", true).option("--sam", "Enable sam agent", true).option("--wit", "Enable wit agent", true).action((options) => {
-  const hasTmux = checkTmux();
-  const hasJJ = checkJJ();
-  if (!hasTmux || !hasJJ) {
+program2.command("start").description("Start full AgentMux environment with 4 panes").option("--nui", "Enable nui agent", true).option("--no-nui", "Disable nui agent").option("--sam", "Enable sam agent", true).option("--no-sam", "Disable sam agent").option("--wit", "Enable wit agent", true).option("--no-wit", "Disable wit agent").action((options) => {
+  if (!checkTmux()) {
     console.log(source_default.red(`
-\u274C Missing dependencies!`));
+\u274C Missing tmux dependency!`));
     console.log(source_default.white(`Run: agentmux install
 `));
     return;
   }
-  const agentMuxDir = getAgentMuxDir4();
+  const agentMuxDir = getAgentMuxDir();
   try {
     fs.accessSync(agentMuxDir, fs.constants.F_OK);
   } catch {
@@ -3691,35 +2502,35 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   console.log(source_default.blue(`\uD83C\uDF0A Starting AgentMux environment...
 `));
   try {
-    execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+    execFileSync("tmux", ["kill-session", "-t", session], { stdio: "ignore" });
   } catch {}
   console.log(source_default.gray("Creating 4-pane split screen..."));
-  execSync(`tmux new-session -d -s ${session} -n agentmux`);
-  execSync(`tmux set -t ${session} mouse on`);
+  execFileSync("tmux", ["new-session", "-d", "-s", session, "-n", "agentmux"]);
+  execFileSync("tmux", ["set", "-t", session, "mouse", "on"]);
   console.log(source_default.gray("Creating nui pane..."));
-  execSync(`tmux split-window -h -t ${session}`);
+  execFileSync("tmux", ["split-window", "-h", "-t", session]);
   console.log(source_default.gray("Creating sam pane..."));
-  execSync(`tmux select-pane -t ${session}:0.0`);
-  execSync(`tmux split-window -v -t ${session}`);
+  execFileSync("tmux", ["select-pane", "-t", `${session}:0.0`]);
+  execFileSync("tmux", ["split-window", "-v", "-t", session]);
   console.log(source_default.gray("Creating wit pane..."));
-  execSync(`tmux select-pane -t ${session}:0.1`);
-  execSync(`tmux split-window -v -t ${session}`);
+  execFileSync("tmux", ["select-pane", "-t", `${session}:0.1`]);
+  execFileSync("tmux", ["split-window", "-v", "-t", session]);
   console.log(source_default.gray("Setting up status pane..."));
-  execSync(`tmux select-pane -t ${session}:0.0`);
-  execSync(`tmux select-pane -t ${session}:0.0 -T "status"`);
-  execSync(`tmux send-keys -t ${session}:0.0 "${process.argv[0]} ${process.argv[1]} status" C-m`);
+  execFileSync("tmux", ["select-pane", "-t", `${session}:0.0`]);
+  execFileSync("tmux", ["select-pane", "-t", `${session}:0.0`, "-T", "status"]);
+  execFileSync("tmux", ["send-keys", "-t", `${session}:0.0`, `${process.argv[0]} ${process.argv[1]} status`, "C-m"]);
   AGENTS.filter((a) => a.name !== "status").forEach((agent) => {
     const optionKey = agent.name;
     if (options[optionKey]) {
       console.log(source_default.gray(`Starting ${agent.name}...`));
-      execSync(`tmux select-pane -t ${session}:0.${agent.pane}`);
-      execSync(`tmux select-pane -t ${session}:0.${agent.pane} -T "${agent.name} (${agent.harness})"`);
-      execSync(`tmux send-keys -t ${session}:0.${agent.pane} "clear" C-m`);
+      execFileSync("tmux", ["select-pane", "-t", `${session}:0.${agent.pane}`]);
+      execFileSync("tmux", ["select-pane", "-t", `${session}:0.${agent.pane}`, "-T", `${agent.name} (${agent.harness})`]);
+      execFileSync("tmux", ["send-keys", "-t", `${session}:0.${agent.pane}`, "clear", "C-m"]);
       const agentCmd = `AGENTMUX_AGENT=${agent.name} AGENTMUX_PROJECT=${currentDir} ${agent.cmd}`;
-      execSync(`tmux send-keys -t ${session}:0.${agent.pane} "${agentCmd}" C-m`);
+      execFileSync("tmux", ["send-keys", "-t", `${session}:0.${agent.pane}`, agentCmd, "C-m"]);
     }
   });
-  execSync(`tmux select-layout -t ${session} tiled`);
+  execFileSync("tmux", ["select-layout", "-t", session, "tiled"]);
   console.log(source_default.green(`
 \u2705 AgentMux environment ready!`));
   console.log(source_default.yellow(`
@@ -3741,7 +2552,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   spawn("tmux", ["attach", "-t", session], { stdio: "inherit" });
 });
 program2.command("status").description("Show live status with auto-refresh (runs until Ctrl+C)").action(() => {
-  const agentMuxDir = getAgentMuxDir4();
+  const agentMuxDir = getAgentMuxDir();
   try {
     fs.accessSync(agentMuxDir, fs.constants.F_OK);
   } catch {
@@ -3751,8 +2562,7 @@ program2.command("status").description("Show live status with auto-refresh (runs
 `));
     return;
   }
-  const hasJJ = checkJJ();
-  let lastState = "";
+  let lastCommitCount = 0;
   let lastUpdateTime = Date.now();
   function renderStatus() {
     console.clear();
@@ -3763,80 +2573,49 @@ program2.command("status").description("Show live status with auto-refresh (runs
     process.stdout.write(`${source_default.gray(`\u23F1\uFE0F  Last update: ${secondsSinceUpdate}s ago`)}
 
 `);
-    console.log(source_default.yellow("JJ Changes:"));
-    if (hasJJ) {
+    console.log(source_default.yellow("Recent Commits:"));
+    try {
+      const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
       try {
-        const jjDir = path.join(agentMuxDir, ".jj");
-        try {
-          fs.accessSync(jjDir, fs.constants.F_OK);
-          const projectRoot = path.dirname(agentMuxDir);
-          const logOutput = exec('jj log --no-graph -r "ancestors(@) | heads(all())" --limit 10 2>/dev/null || echo ""', {
-            cwd: projectRoot
-          });
-          const bookmarksOutput = exec('jj bookmark list --all 2>/dev/null || echo ""', {
-            cwd: projectRoot
-          });
-          const pushedCommitIds = new Set;
-          if (bookmarksOutput) {
-            bookmarksOutput.split(`
-`).forEach((line) => {
-              const match = line.match(/^\s*(\S+):\s+([a-f0-9]+)/);
+        fs.accessSync(commitsPath, fs.constants.F_OK);
+        const tailOutput = exec(`tail -n 20 "${commitsPath}" 2>/dev/null`);
+        if (tailOutput && tailOutput.trim()) {
+          const lines = tailOutput.trim().split(`
+`).filter((l) => l.trim() && !l.startsWith("#"));
+          if (lines.length > 0) {
+            lines.reverse().forEach((line) => {
+              const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
               if (match) {
-                pushedCommitIds.add(match[2].substring(0, 12));
+                const [, timestamp, status, hash, agent, message, reviewer] = match;
+                const isReviewed = status === "REVIEWED";
+                const symbol = isReviewed ? "\u25CF" : "\u25CB";
+                const agentName = agent.replace("@", "");
+                const agentColor = agentName === "nui" ? source_default.cyan : agentName === "sam" ? source_default.green : agentName === "wit" ? source_default.magenta : source_default.white;
+                const shortHash = hash.substring(0, 7);
+                let displayLine = `${shortHash} ${agent}: ${message}`;
+                if (reviewer) {
+                  displayLine += ` (${reviewer})`;
+                }
+                console.log(`  ${symbol} ${agentColor(displayLine)}`);
               }
             });
-          }
-          if (logOutput && logOutput.trim()) {
-            const lines = logOutput.split(`
-`).filter((l) => l.trim());
-            if (lines.length > 0) {
-              lines.forEach((line) => {
-                const symbolMatch = line.match(/^([\u25CB\u25CF@\u25C6])\u0009/);
-                const commitMatch = line.match(/([a-f0-9]{12})/);
-                const descMatch = line.match(/\u2502\u0009(.*)$/);
-                if (symbolMatch && descMatch) {
-                  const commitId = commitMatch ? commitMatch[1] : "";
-                  const isPushed = pushedCommitIds.has(commitId);
-                  const symbol = isPushed ? "\u25CF" : "\u25CB";
-                  const description = descMatch[1].trim();
-                  const agentColor = description.includes("@nui") ? source_default.cyan : description.includes("@sam") ? source_default.green : description.includes("@wit") ? source_default.magenta : source_default.white;
-                  console.log(`  ${symbol} ${agentColor(description)}`);
-                } else if (line.includes("@") || line.includes("\u25CB") || line.includes("\u25CF")) {
-                  const commitMatch2 = line.match(/([a-f0-9]{12})/);
-                  const commitId = commitMatch2 ? commitMatch2[1] : "";
-                  const isPushed = pushedCommitIds.has(commitId);
-                  const symbol = isPushed ? "\u25CF" : "\u25CB";
-                  const authorMatch = line.match(/@(\w+)/);
-                  const author = authorMatch ? authorMatch[1] : "unknown";
-                  let displayLine = line;
-                  const descMatch2 = line.match(/\u2502\u0009(.*)$/);
-                  if (descMatch2) {
-                    displayLine = descMatch2[1].trim();
-                  }
-                  const agentColor = author === "nui" ? source_default.cyan : author === "sam" ? source_default.green : author === "wit" ? source_default.magenta : source_default.white;
-                  console.log(`  ${symbol} ${agentColor(displayLine)}`);
-                }
-              });
-            } else {
-              console.log(source_default.gray("  No commits yet"));
-            }
           } else {
             console.log(source_default.gray("  No commits yet"));
           }
-        } catch {
-          console.log(source_default.gray("  JJ repo initializing..."));
+        } else {
+          console.log(source_default.gray("  No commits yet"));
         }
-      } catch (e) {
-        console.log(source_default.gray("  No changes yet"));
+      } catch {
+        console.log(source_default.gray("  No commits yet"));
       }
-    } else {
-      console.log(source_default.gray("  JJ not installed"));
+    } catch (e) {
+      console.log(source_default.gray("  No commits yet"));
     }
     console.log(source_default.yellow(`
 Active Agents:`));
     try {
       const session = getSessionName();
-      const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
+      const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#P: #{pane_current_command}"], { encoding: "utf-8" });
       if (output) {
         const lines = output.trim().split(`
 `);
@@ -3893,11 +2672,15 @@ Recent Messages:`));
   }
   renderStatus();
   const pollInterval = setInterval(() => {
-    const currentState = getJJStateHash(agentMuxDir);
-    if (currentState !== lastState) {
-      lastState = currentState;
-      lastUpdateTime = Date.now();
-    }
+    try {
+      const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
+      const stats = fs.statSync(commitsPath);
+      const currentCount = stats.mtime.getTime();
+      if (currentCount !== lastCommitCount) {
+        lastCommitCount = currentCount;
+        lastUpdateTime = Date.now();
+      }
+    } catch {}
     renderStatus();
   }, STATUS_REFRESH_INTERVAL_MS);
   process.on("SIGINT", () => {
@@ -3915,7 +2698,7 @@ program2.command("send <to> <message...>").description("Send a message to anothe
   const session = getSessionName();
   const msg = message.join(" ");
   const from = process.env.AGENTMUX_AGENT || "user";
-  const agentMuxDir = getAgentMuxDir4();
+  const agentMuxDir = getAgentMuxDir();
   const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}`;
   const timestamp = new Date().toISOString();
   try {
@@ -3942,7 +2725,216 @@ program2.command("whoami").description("Show current agent identity").action(() 
   const harness = agentConfig?.harness || "unknown";
   console.log(`${agent} (${harness}) @ ${project}`);
 });
-program2.command("install-deps").description("Install all required dependencies (claude, opencode, jj, tmux, bun)").action(() => {
+program2.command("commit <hash> <message...>").description("Log a commit with hash and message (use @agent tag)").action((hash, message) => {
+  const agentMuxDir = getAgentMuxDir();
+  const agent = process.env.AGENTMUX_AGENT || "user";
+  const msg = message.join(" ");
+  const timestamp = new Date().toISOString();
+  try {
+    const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
+    const logEntry = `[${timestamp}] PENDING ${hash} @${agent}: ${msg}
+`;
+    fs.appendFileSync(commitsPath, logEntry);
+    console.log(source_default.green(`\u2705 Commit logged: \u25CB ${hash.substring(0, 7)} @${agent}: ${msg}`));
+  } catch (e) {
+    console.log(source_default.red("\u274C Failed to log commit"));
+  }
+});
+program2.command("review <hash>").description("Mark a commit as reviewed").action((hash) => {
+  const agentMuxDir = getAgentMuxDir();
+  const reviewer = process.env.AGENTMUX_AGENT || "user";
+  try {
+    const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
+    try {
+      fs.accessSync(commitsPath, fs.constants.F_OK);
+    } catch {
+      console.log(source_default.red(`\u274C No commits found. Did you mean to create it first with 'agentmux commit'?`));
+      return;
+    }
+    const content = fs.readFileSync(commitsPath, "utf-8");
+    const lines = content.split(`
+`);
+    let found = false;
+    const hashPattern = new RegExp(`\\s${hash}\\s`);
+    const updatedLines = lines.map((line) => {
+      if (!found && line.includes(" PENDING ") && hashPattern.test(line)) {
+        found = true;
+        return line.replace(" PENDING ", " REVIEWED ") + ` | ${reviewer}`;
+      }
+      return line;
+    });
+    if (found) {
+      fs.writeFileSync(commitsPath, updatedLines.join(`
+`));
+      console.log(source_default.green(`\u2705 Commit ${hash.substring(0, 7)} marked as reviewed by @${reviewer}`));
+    } else {
+      const alreadyReviewed = lines.some((line) => line.includes(" REVIEWED ") && hashPattern.test(line));
+      if (alreadyReviewed) {
+        console.log(source_default.yellow(`\u26A0\uFE0F  Commit ${hash.substring(0, 7)} is already reviewed`));
+        const updatedLines2 = lines.map((line) => {
+          if (line.includes(" REVIEWED ") && hashPattern.test(line) && !line.includes(`| ${reviewer}`) && !line.includes(`, ${reviewer}`)) {
+            return line + `, ${reviewer}`;
+          }
+          return line;
+        });
+        fs.writeFileSync(commitsPath, updatedLines2.join(`
+`));
+      } else {
+        console.log(source_default.red(`\u274C Commit ${hash.substring(0, 7)} not found`));
+      }
+    }
+  } catch (e) {
+    console.log(source_default.red("\u274C Failed to review commit"));
+  }
+});
+program2.command("commits").alias("log").description("Show recent commits").action(() => {
+  const agentMuxDir = getAgentMuxDir();
+  try {
+    const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
+    try {
+      fs.accessSync(commitsPath, fs.constants.F_OK);
+      const content = fs.readFileSync(commitsPath, "utf-8");
+      const lines = content.split(`
+`).filter((l) => l.trim() && !l.startsWith("#"));
+      if (lines.length === 0) {
+        console.log(source_default.gray("No commits yet"));
+        return;
+      }
+      console.log(source_default.blue(`
+\uD83D\uDCCB Recent Commits
+`));
+      lines.reverse().slice(0, 20).forEach((line) => {
+        const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
+        if (match) {
+          const [, timestamp, status, hash, agent, message, reviewer] = match;
+          const isReviewed = status === "REVIEWED";
+          const symbol = isReviewed ? "\u25CF" : "\u25CB";
+          const shortHash = hash.substring(0, 7);
+          const time = new Date(timestamp);
+          const timeStr = time.toLocaleTimeString();
+          console.log(`  ${symbol} ${shortHash} ${agent}: ${message}`);
+          if (reviewer) {
+            console.log(`     reviewed by: ${reviewer}`);
+          }
+        }
+      });
+      console.log();
+    } catch {
+      console.log(source_default.gray("No commits yet"));
+    }
+  } catch (e) {
+    console.log(source_default.red("\u274C Failed to read commits"));
+  }
+});
+program2.command("clear-commits").description("Clear all commit history").action(() => {
+  const agentMuxDir = getAgentMuxDir();
+  try {
+    const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
+    fs.writeFileSync(commitsPath, `# Commits history cleared
+`);
+    console.log(source_default.green("\u2705 Commit history cleared"));
+  } catch (e) {
+    console.log(source_default.red("\u274C Failed to clear commits"));
+  }
+});
+program2.command("workflow [name]").description("List, show, or install workflows").option("--install", "Install workflow from GitHub").action((name, options) => {
+  const agentMuxDir = getAgentMuxDir();
+  const workflowsDir = path.join(agentMuxDir, "workflows");
+  if (!fs.existsSync(workflowsDir)) {
+    fs.mkdirSync(workflowsDir, { recursive: true });
+  }
+  if (options.install && name) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      console.log(source_default.red(`\u274C Invalid workflow name: '${name}'`));
+      console.log(source_default.gray("   Workflow names can only contain letters, numbers, hyphens, and underscores"));
+      return;
+    }
+    console.log(source_default.blue(`\uD83D\uDD27 Installing workflow: ${name}`));
+    const workflowUrl = `https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/workflows/${name}/SKILL.md`;
+    const targetDir = path.join(workflowsDir, name);
+    const targetPath = path.join(targetDir, "SKILL.md");
+    try {
+      if (fs.existsSync(targetPath)) {
+        console.log(source_default.yellow(`\u26A0\uFE0F  Workflow '${name}' is already installed`));
+        console.log(source_default.gray(`   Location: ${targetPath}`));
+        return;
+      }
+      fs.mkdirSync(targetDir, { recursive: true });
+      try {
+        execSync(`curl -fsSL "${workflowUrl}" -o "${targetPath}"`, { stdio: "inherit" });
+        console.log(source_default.green(`\u2705 Workflow '${name}' installed successfully`));
+        console.log(source_default.gray(`   Location: ${targetPath}`));
+        console.log(source_default.gray(`   Usage: agentmux workflow ${name}`));
+      } catch {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+        console.log(source_default.red(`\u274C Failed to download workflow '${name}'`));
+        console.log(source_default.gray(`   URL: ${workflowUrl}`));
+        console.log(source_default.gray(`   Make sure the workflow exists in the repository`));
+      }
+    } catch (e) {
+      console.log(source_default.red(`\u274C Failed to install workflow: ${e}`));
+    }
+  } else if (name) {
+    const workflowPath = path.join(workflowsDir, name, "SKILL.md");
+    try {
+      if (fs.existsSync(workflowPath)) {
+        const content = fs.readFileSync(workflowPath, "utf-8");
+        console.log(source_default.blue(`
+\uD83D\uDCCB Workflow: ${name}
+`));
+        console.log(content);
+      } else {
+        console.log(source_default.red(`\u274C Workflow '${name}' not found`));
+        console.log(source_default.gray(`   Install with: agentmux workflow ${name} --install`));
+        const installed = fs.readdirSync(workflowsDir).filter((f) => {
+          const stat = fs.statSync(path.join(workflowsDir, f));
+          return stat.isDirectory() && fs.existsSync(path.join(workflowsDir, f, "SKILL.md"));
+        });
+        if (installed.length > 0) {
+          console.log(source_default.gray(`
+   Installed workflows:`));
+          installed.forEach((w) => console.log(source_default.gray(`     - ${w}`)));
+        }
+      }
+    } catch (e) {
+      console.log(source_default.red(`\u274C Failed to read workflow: ${e}`));
+    }
+  } else {
+    console.log(source_default.blue(`
+\uD83D\uDCCB Installed Workflows
+`));
+    try {
+      const workflows = [];
+      if (fs.existsSync(workflowsDir)) {
+        const entries = fs.readdirSync(workflowsDir);
+        for (const entry of entries) {
+          const workflowPath = path.join(workflowsDir, entry, "SKILL.md");
+          if (fs.existsSync(workflowPath)) {
+            workflows.push(entry);
+          }
+        }
+      }
+      if (workflows.length === 0) {
+        console.log(source_default.gray("  No workflows installed"));
+        console.log(source_default.gray(`
+  Install workflows from GitHub:`));
+        console.log(source_default.white("    agentmux workflow <name> --install"));
+      } else {
+        workflows.forEach((w) => {
+          console.log(`  \u2713 ${source_default.bold(w)}`);
+        });
+        console.log(source_default.gray(`
+  View workflow: agentmux workflow <name>`));
+      }
+      console.log(source_default.gray(`
+  Available workflows on GitHub:`));
+      console.log(source_default.gray("    - detailed-commits"));
+    } catch (e) {
+      console.log(source_default.red("\u274C Failed to list workflows"));
+    }
+  }
+});
+program2.command("install-deps").description("Install all required dependencies (claude, opencode, tmux, bun)").action(() => {
   console.log(source_default.blue(`\uD83D\uDD27 Installing AgentMux dependencies...
 `));
   const platform = process.platform;
@@ -3951,7 +2943,6 @@ program2.command("install-deps").description("Install all required dependencies 
     console.log(source_default.gray("   Please install manually:"));
     console.log(source_default.white("   - claude: npm install -g @anthropic-ai/claude-cli"));
     console.log(source_default.white("   - opencode: npm install -g opencode"));
-    console.log(source_default.white("   - jj: brew install jj"));
     console.log(source_default.white("   - tmux: brew install tmux"));
     console.log(source_default.white("   - bun: curl -fsSL https://bun.sh/install | bash"));
     return;
@@ -3959,7 +2950,6 @@ program2.command("install-deps").description("Install all required dependencies 
   const dependencies = [
     { name: "claude", installCmd: "npm install -g @anthropic-ai/claude-cli" },
     { name: "opencode", installCmd: "npm install -g opencode" },
-    { name: "jj", installCmd: "brew install jj" },
     { name: "tmux", installCmd: "brew install tmux" },
     { name: "bun", installCmd: "curl -fsSL https://bun.sh/install | bash" }
   ];
@@ -3991,7 +2981,7 @@ program2.command("list").description("List all agents with their status and harn
   const session = getSessionName();
   const spawnedWindows = [];
   try {
-    const output = exec(`tmux list-panes -t ${session} -F "#P: #{pane_current_command}" 2>/dev/null`);
+    const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#P: #{pane_current_command}"], { encoding: "utf-8" });
     const paneCommands = {};
     if (output) {
       output.trim().split(`
@@ -4008,7 +2998,7 @@ program2.command("list").description("List all agents with their status and harn
       console.log(`           ${source_default.gray(cmd)}`);
     });
     try {
-      const windowsOutput = exec(`tmux list-windows -t ${session} -F "#I: #W" 2>/dev/null`);
+      const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#I: #W"], { encoding: "utf-8" });
       if (windowsOutput) {
         windowsOutput.trim().split(`
 `).forEach((line) => {
@@ -4049,7 +3039,7 @@ Total: ${totalAgents}/${MAX_AGENTS} agents`));
 program2.command("stop").description("Stop the AgentMux tmux session").action(() => {
   const session = getSessionName();
   try {
-    execSync(`tmux kill-session -t ${session} 2>/dev/null`);
+    execFileSync("tmux", ["kill-session", "-t", session], { stdio: "ignore" });
     console.log(source_default.green(`
 \u2705 AgentMux session stopped
 `));
@@ -4071,7 +3061,7 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
   const session = getSessionName();
   const currentDir = process.cwd();
   try {
-    execSync(`tmux has-session -t ${session} 2>/dev/null`);
+    execFileSync("tmux", ["has-session", "-t", session], { stdio: "ignore" });
   } catch {
     console.log(source_default.red(`
 \u274C No active AgentMux session. Run: agentmux start
@@ -4079,10 +3069,10 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
     return;
   }
   try {
-    const windowCount = execSync(`tmux list-windows -t ${session} | wc -l`, { encoding: "utf-8" });
-    const paneCount = execSync(`tmux list-panes -t ${session} | wc -l`, { encoding: "utf-8" });
-    const totalAgents = parseInt(windowCount.trim()) + parseInt(paneCount.trim()) - 1;
-    if (totalAgents >= MAX_AGENTS) {
+    const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#{window_name}"], { encoding: "utf-8" });
+    const windowCount = windowsOutput.trim().split(`
+`).filter((w) => w !== "agentmux").length;
+    if (windowCount >= MAX_AGENTS - AGENTS.length) {
       console.log(source_default.red(`
 \u274C Agent limit reached (${MAX_AGENTS} max). Kill an agent first.
 `));
@@ -4090,19 +3080,23 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
     }
   } catch {}
   try {
-    execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
-    console.log(source_default.red(`
+    const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#{window_name}"], { encoding: "utf-8" });
+    const windows = windowsOutput.trim().split(`
+`);
+    if (windows.includes(agentName)) {
+      console.log(source_default.red(`
 \u274C Agent "${agentName}" already exists
 `));
-    return;
+      return;
+    }
   } catch {}
   console.log(source_default.blue(`
 \uD83C\uDF0A Spawning ${agentName} (${harness})...
 `));
   try {
-    execSync(`tmux new-window -t ${session} -n "${agentName}"`);
+    execFileSync("tmux", ["new-window", "-t", session, "-n", agentName]);
     const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
-    execSync(`tmux send-keys -t ${session}:${agentName} "${cmd}" C-m`);
+    execFileSync("tmux", ["send-keys", "-t", `${session}:${agentName}`, cmd, "C-m"]);
     console.log(source_default.green(`\u2705 Agent "${agentName}" spawned successfully!`));
     console.log(source_default.gray(`   Window: ${agentName}`));
     console.log(source_default.gray(`   Harness: ${harness}`));
@@ -4119,7 +3113,7 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
     return;
   const session = getSessionName();
   try {
-    execSync(`tmux has-session -t ${session} 2>/dev/null`);
+    execFileSync("tmux", ["has-session", "-t", session], { stdio: "ignore" });
   } catch {
     console.log(source_default.red(`
 \u274C No active AgentMux session.
@@ -4130,401 +3124,29 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
 \uD83D\uDC80 Killing ${agentName}...`));
   try {
     try {
-      execSync(`tmux list-windows -t ${session} | grep -q "${agentName}" 2>/dev/null`);
-      execSync(`tmux kill-window -t ${session}:${agentName}`);
-      console.log(source_default.green(`\u2705 Agent "${agentName}" killed
-`));
-      return;
-    } catch {
-      if (AGENT_PANE_MAP[agentName] !== undefined) {
-        execSync(`tmux kill-pane -t ${session}:0.${AGENT_PANE_MAP[agentName]}`);
+      const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#{window_name}"], { encoding: "utf-8" });
+      const windows = windowsOutput.trim().split(`
+`);
+      if (windows.includes(agentName)) {
+        execFileSync("tmux", ["kill-window", "-t", `${session}:${agentName}`]);
         console.log(source_default.green(`\u2705 Agent "${agentName}" killed
 `));
         return;
       }
-      console.log(source_default.red(`
+    } catch {}
+    if (AGENT_PANE_MAP[agentName] !== undefined) {
+      execFileSync("tmux", ["kill-pane", "-t", `${session}:0.${AGENT_PANE_MAP[agentName]}`]);
+      console.log(source_default.green(`\u2705 Agent "${agentName}" killed
+`));
+      return;
+    }
+    console.log(source_default.red(`
 \u274C Agent "${agentName}" not found
 `));
-    }
   } catch (e) {
     console.log(source_default.red(`
 \u274C Failed to kill agent: ${e}
 `));
   }
 });
-var memoryProgram = new Command;
-memoryProgram.name("memory").description("Structured expertise management for agents").version("1.0.0");
-memoryProgram.command("init").description("Initialize agentmux memory storage").action(async () => {
-  const { existsSync: existsSync9 } = await import("fs");
-  const { ensureExpertiseDir: ensureExpertiseDir3, readConfig: readConfig3, writeConfig: writeConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
-  const { createExpertiseFile: createExpertiseFile4 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  await ensureExpertiseDir3();
-  const config = await readConfig3();
-  for (const domain of config.domains) {
-    const filePath = getExpertisePath3(domain);
-    if (!existsSync9(filePath)) {
-      await createExpertiseFile4(filePath);
-    }
-  }
-  console.log(source_default.green("\u2713 Initialized agentmux memory storage"));
-  console.log(source_default.dim(`  Domains: ${config.domains.join(", ")}`));
-  console.log(source_default.dim(`  Storage: .agentmux/expertise/`));
-});
-memoryProgram.command("add").argument("<domain>", "domain to add").description("Add a new expertise domain").action(async (domain) => {
-  const { ensureExpertiseDir: ensureExpertiseDir3, readConfig: readConfig3, writeConfig: writeConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
-  const { createExpertiseFile: createExpertiseFile4 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  await ensureExpertiseDir3();
-  const config = await readConfig3();
-  if (config.domains.includes(domain)) {
-    console.log(source_default.yellow(`Domain "${domain}" already exists.`));
-    return;
-  }
-  config.domains.push(domain);
-  await writeConfig3(config);
-  const filePath = getExpertisePath3(domain);
-  await createExpertiseFile4(filePath);
-  console.log(source_default.green(`\u2713 Added domain "${domain}"`));
-});
-memoryProgram.command("record").argument("<domain>", "expertise domain").argument("[content]", "record content").option("--type <type>", "record type", "convention").option("--classification <classification>", "classification level", "tactical").option("--description <description>", "description of the record").option("--resolution <resolution>", "resolution for failure records").option("--title <title>", "title for decision records").option("--rationale <rationale>", "rationale for decision records").option("--tags <tags>", "comma-separated tags").option("--force", "force recording even if duplicate exists").option("--dry-run", "preview what would be recorded without writing").description("Record an expertise record").action(async (domain, content, options) => {
-  const { ensureExpertiseDir: ensureExpertiseDir3, getExpertisePath: getExpertisePath3, readConfig: readConfig3, addDomain: addDomain3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
-  const { appendRecord: appendRecord2, findDuplicate: findDuplicate2, readExpertiseFile: readExpertiseFile3 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const { ExpertiseRecord, RecordType, Classification } = await Promise.resolve().then(() => (init_types(), exports_types));
-  await ensureExpertiseDir3();
-  const config = await readConfig3();
-  if (!config.domains.includes(domain)) {
-    await addDomain3(domain);
-    console.log(source_default.green(`\u2713 Auto-created domain "${domain}"`));
-  }
-  const recordedBy = process.env.AGENTMUX_AGENT || "unknown";
-  const recordedAt = new Date().toISOString();
-  const tags = typeof options.tags === "string" ? options.tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
-  let record;
-  const recordType = options.type;
-  const classification = options.classification || "tactical";
-  switch (recordType) {
-    case "convention": {
-      const conventionContent = content || options.description;
-      if (!conventionContent) {
-        console.error(source_default.red("Error: convention records require content or --description"));
-        process.exitCode = 1;
-        return;
-      }
-      record = {
-        type: "convention",
-        content: conventionContent,
-        classification,
-        recorded_at: recordedAt,
-        recorded_by: recordedBy,
-        ...tags && tags.length > 0 && { tags }
-      };
-      break;
-    }
-    case "failure": {
-      const failureDesc = options.description;
-      const failureResolution = options.resolution;
-      if (!failureDesc || !failureResolution) {
-        console.error(source_default.red("Error: failure records require --description and --resolution"));
-        process.exitCode = 1;
-        return;
-      }
-      record = {
-        type: "failure",
-        description: failureDesc,
-        resolution: failureResolution,
-        classification,
-        recorded_at: recordedAt,
-        recorded_by: recordedBy,
-        ...tags && tags.length > 0 && { tags }
-      };
-      break;
-    }
-    case "decision": {
-      const decisionTitle = options.title;
-      const decisionRationale = options.rationale;
-      if (!decisionTitle || !decisionRationale) {
-        console.error(source_default.red("Error: decision records require --title and --rationale"));
-        process.exitCode = 1;
-        return;
-      }
-      record = {
-        type: "decision",
-        title: decisionTitle,
-        rationale: decisionRationale,
-        classification,
-        recorded_at: recordedAt,
-        recorded_by: recordedBy,
-        ...tags && tags.length > 0 && { tags }
-      };
-      break;
-    }
-    default:
-      console.error(source_default.red(`Error: Unknown record type "${recordType}"`));
-      process.exitCode = 1;
-      return;
-  }
-  const filePath = getExpertisePath3(domain);
-  const dryRun = options.dryRun === true;
-  if (dryRun) {
-    const existing = await readExpertiseFile3(filePath);
-    const dup = findDuplicate2(existing, record);
-    if (dup && !options.force) {
-      console.log(source_default.yellow(`Dry-run: Duplicate ${recordType} already exists in ${domain}. Would skip.`));
-    } else {
-      console.log(source_default.green(`\u2713 Dry-run: Would create ${recordType} in ${domain}`));
-    }
-    console.log(source_default.dim("  Run without --dry-run to apply changes."));
-  } else {
-    const existing = await readExpertiseFile3(filePath);
-    const dup = findDuplicate2(existing, record);
-    if (dup && !options.force) {
-      console.log(source_default.yellow(`Duplicate ${recordType} already exists in ${domain}. Use --force to add anyway.`));
-    } else {
-      await appendRecord2(filePath, record);
-      console.log(source_default.green(`\u2713 Recorded ${recordType} in ${domain}`));
-    }
-  }
-});
-memoryProgram.command("query").argument("[domain]", "expertise domain to query (or --all for all)").option("--type <type>", "filter by record type").option("--classification <classification>", "filter by classification").option("--plan <plan>", "filter by plan reference (e.g., @sam/api-design)").option("--all", "show all domains").description("Query expertise records (use --all to see all domains)").action(async (domain, options) => {
-  const { readConfig: readConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
-  const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2, filterByType: filterByType2, filterByClassification: filterByClassification2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const config = await readConfig3();
-  const domainsToQuery = [];
-  if (options.all) {
-    domainsToQuery.push(...config.domains);
-    if (domainsToQuery.length === 0) {
-      console.log("No domains configured. Run `am memory init` first.");
-      return;
-    }
-  } else if (domain) {
-    if (!config.domains.includes(domain)) {
-      console.error(source_default.red(`Error: Domain "${domain}" not found.`));
-      console.error(`Hint: Run \`am memory add ${domain}\` to create.`);
-      process.exitCode = 1;
-      return;
-    }
-    domainsToQuery.push(domain);
-  } else {
-    console.error(source_default.red("Error: Please specify a domain or use --all"));
-    process.exitCode = 1;
-    return;
-  }
-  function filterByPlan(records, planRef) {
-    return records.filter((r) => r.plan_refs && r.plan_refs.some((ref) => ref.includes(planRef)));
-  }
-  function formatRecord(r) {
-    switch (r.type) {
-      case "convention":
-        return `- ${r.content}`;
-      case "failure":
-        return `- ${r.description}
-  \u2192 ${r.resolution}`;
-      case "decision":
-        return `- **${r.title}**: ${r.rationale}`;
-    }
-  }
-  for (const d of domainsToQuery) {
-    const filePath = getExpertisePath3(d);
-    let records = await readExpertiseFile3(filePath);
-    const lastUpdated = await getFileModTime2(filePath);
-    if (options.type) {
-      records = filterByType2(records, options.type);
-    }
-    if (options.classification) {
-      records = filterByClassification2(records, options.classification);
-    }
-    if (options.plan) {
-      records = filterByPlan(records, options.plan);
-    }
-    if (records.length > 0) {
-      console.log(`
-## ${d}`);
-      if (lastUpdated) {
-        const ago = Math.floor((Date.now() - lastUpdated.getTime()) / 3600000);
-        console.log(`(${records.length} entries, updated ${ago}h ago)`);
-      }
-      const byType = { convention: [], failure: [], decision: [] };
-      for (const r of records) {
-        byType[r.type].push(r);
-      }
-      if (byType.convention.length > 0) {
-        console.log(`
-### Conventions`);
-        for (const r of byType.convention)
-          console.log(formatRecord(r));
-      }
-      if (byType.failure.length > 0) {
-        console.log(`
-### Known Failures`);
-        for (const r of byType.failure)
-          console.log(formatRecord(r));
-      }
-      if (byType.decision.length > 0) {
-        console.log(`
-### Decisions`);
-        for (const r of byType.decision)
-          console.log(formatRecord(r));
-      }
-    }
-  }
-});
-memoryProgram.command("prime").argument("[domains...]", "domain(s) to include").option("--compact", "condensed output (default)").option("--full", "include full details").option("--exclude <domains...>", "domains to exclude").description("Generate agent-optimized context for injection").action(async (domainsArg, options) => {
-  const { readConfig: readConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
-  const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const config = await readConfig3();
-  const excluded = options.exclude || [];
-  let targetDomains = domainsArg && domainsArg.length > 0 ? domainsArg.filter((d) => !excluded.includes(d)) : config.domains.filter((d) => !excluded.includes(d));
-  if (targetDomains.length === 0) {
-    console.log("No domains to prime.");
-    return;
-  }
-  const sections = [];
-  for (const domain of targetDomains) {
-    const filePath = getExpertisePath3(domain);
-    const records = await readExpertiseFile3(filePath);
-    const lastUpdated = await getFileModTime2(filePath);
-    if (records.length === 0)
-      continue;
-    const lines = [];
-    lines.push(`## ${domain}`);
-    const byType = {
-      convention: [],
-      failure: [],
-      decision: []
-    };
-    for (const r of records) {
-      byType[r.type].push(r);
-    }
-    const formatCompact = (r) => {
-      switch (r.type) {
-        case "convention":
-          return `[convention] ${r.content}`;
-        case "failure":
-          return `[failure] ${r.description} \u2192 ${r.resolution}`;
-        case "decision":
-          return `[decision] ${r.title}: ${r.rationale}`;
-      }
-    };
-    const formatFull = (r) => {
-      const meta = options.full ? ` (${r.classification}, ${r.recorded_by}, ${new Date(r.recorded_at).toLocaleDateString()})` : "";
-      switch (r.type) {
-        case "convention":
-          return `- ${r.content}${meta}`;
-        case "failure":
-          return `- ${r.description}${meta}
-  \u2192 ${r.resolution}`;
-        case "decision":
-          return `- **${r.title}**: ${r.rationale}${meta}`;
-      }
-    };
-    const formatter = options.full ? formatFull : formatCompact;
-    if (byType.convention.length > 0) {
-      lines.push(`
-### Conventions`);
-      for (const r of byType.convention)
-        lines.push(formatter(r));
-    }
-    if (byType.failure.length > 0) {
-      lines.push(`
-### Known Failures`);
-      for (const r of byType.failure)
-        lines.push(formatter(r));
-    }
-    if (byType.decision.length > 0) {
-      lines.push(`
-### Decisions`);
-      for (const r of byType.decision)
-        lines.push(formatter(r));
-    }
-    sections.push(lines.join(`
-`));
-  }
-  if (sections.length > 0) {
-    console.log(`# AgentMux Memory Context
-`);
-    console.log(sections.join(`
-
-`));
-    console.log("\n---\n*Run `am memory query --all` to see full records. Record learnings with `am memory record`*");
-  } else {
-    console.log("No records found in specified domains.");
-  }
-});
-memoryProgram.command("status").description("Show memory status - record counts and last updated").action(async () => {
-  const { readConfig: readConfig3, getExpertisePath: getExpertisePath3, getExpertiseDir: getExpertiseDir3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
-  const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const config = await readConfig3();
-  const expertiseDir = getExpertiseDir3();
-  if (!existsSync8(expertiseDir)) {
-    console.log(source_default.yellow("No .agentmux/expertise/ found. Run `am memory init` first."));
-    return;
-  }
-  console.log(source_default.bold(`
-# AgentMux Memory Status
-`));
-  let totalRecords = 0;
-  for (const domain of config.domains) {
-    const filePath = getExpertisePath3(domain);
-    const records = await readExpertiseFile3(filePath);
-    const lastUpdated = await getFileModTime2(filePath);
-    totalRecords += records.length;
-    const countStr = source_default.white(`${records.length} records`);
-    let timeStr = source_default.gray("(no data)");
-    if (lastUpdated) {
-      const ago = Math.floor((Date.now() - lastUpdated.getTime()) / 3600000);
-      if (ago < 1) {
-        const mins = Math.floor((Date.now() - lastUpdated.getTime()) / 60000);
-        timeStr = source_default.gray(`(${mins}m ago)`);
-      } else if (ago < 24) {
-        timeStr = source_default.gray(`(${ago}h ago)`);
-      } else {
-        const days = Math.floor(ago / 24);
-        timeStr = source_default.gray(`(${days}d ago)`);
-      }
-    }
-    console.log(`  ${source_default.cyan(domain.padEnd(15))} ${countStr} ${timeStr}`);
-  }
-  console.log(source_default.dim(`
-  Total: ${totalRecords} records across ${config.domains.length} domains`));
-  console.log(source_default.dim(`  Storage: ${expertiseDir}
-`));
-});
-program2.addCommand(memoryProgram);
-var planProgram = new Command;
-planProgram.name("plan").description("Versioned plan management for multi-agent collaboration").version("1.0.0");
-planProgram.command("init").argument("<name>", "plan name").description("Create a new plan").action(async (name) => {
-  const { initPlan: initPlan2 } = await Promise.resolve().then(() => (init_init(), exports_init));
-  await initPlan2(name);
-});
-planProgram.command("list").description("List all plans").action(async () => {
-  const { listPlanCommand: listPlanCommand2 } = await Promise.resolve().then(() => (init_init(), exports_init));
-  await listPlanCommand2();
-});
-planProgram.command("commit").argument("<name>", "plan name").option("-m, --message <message>", "commit message").description("Commit current plan.md as new version").action(async (name, options) => {
-  const { commitPlan: commitPlan2 } = await Promise.resolve().then(() => (init_commit(), exports_commit));
-  const message = options.message || `Update ${name}`;
-  await commitPlan2(name, message);
-});
-planProgram.command("log").argument("<name>", "plan name").description("Show version history").action(async (name) => {
-  const { logPlan: logPlan2 } = await Promise.resolve().then(() => (init_commit(), exports_commit));
-  await logPlan2(name);
-});
-planProgram.command("show").argument("<name>", "plan name").option("--with-memory", "show linked memory records").description("Show current plan version").action(async (name, options) => {
-  if (options.withMemory) {
-    const { showPlanWithMemory: showPlanWithMemory2 } = await Promise.resolve().then(() => (init_link(), exports_link));
-    await showPlanWithMemory2(name);
-  } else {
-    const { showPlan: showPlan2 } = await Promise.resolve().then(() => (init_commit(), exports_commit));
-    await showPlan2(name);
-  }
-});
-planProgram.command("link").argument("<plan>", "plan name").option("--memory <ref>", "memory reference ID (e.g., am-8f2d)").option("--version <version>", "specific version (default: current)").description("Link memory record to plan version").action(async (plan, options) => {
-  if (!options.memory) {
-    console.log(source_default.red("Error: --memory <ref> is required"));
-    console.log(source_default.gray("Example: am plan link api-design --memory am-8f2d"));
-    return;
-  }
-  const { linkMemory: linkMemory2 } = await Promise.resolve().then(() => (init_link(), exports_link));
-  await linkMemory2(plan, options.memory, options.version);
-});
-program2.addCommand(planProgram);
 program2.parse();
