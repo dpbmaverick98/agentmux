@@ -1000,6 +1000,7 @@ memoryProgram
   .argument('[domain]', 'expertise domain to query (or --all for all)')
   .option('--type <type>', 'filter by record type')
   .option('--classification <classification>', 'filter by classification')
+  .option('--plan <plan>', 'filter by plan reference (e.g., @sam/api-design)')
   .option('--all', 'show all domains')
   .description('Query expertise records (use --all to see all domains)')
   .action(async (domain: string | undefined, options: any) => {
@@ -1029,6 +1030,10 @@ memoryProgram
       return;
     }
 
+    function filterByPlan(records: ExpertiseRecord[], planRef: string): ExpertiseRecord[] {
+      return records.filter(r => r.plan_refs && r.plan_refs.some(ref => ref.includes(planRef)));
+    }
+
     function formatRecord(r: ExpertiseRecord): string {
       switch (r.type) {
         case 'convention':
@@ -1050,6 +1055,9 @@ memoryProgram
       }
       if (options.classification) {
         records = filterByClassification(records, options.classification);
+      }
+      if (options.plan) {
+        records = filterByPlan(records, options.plan);
       }
 
       if (records.length > 0) {

@@ -4284,7 +4284,7 @@ memoryProgram.command("record").argument("<domain>", "expertise domain").argumen
     }
   }
 });
-memoryProgram.command("query").argument("[domain]", "expertise domain to query (or --all for all)").option("--type <type>", "filter by record type").option("--classification <classification>", "filter by classification").option("--all", "show all domains").description("Query expertise records (use --all to see all domains)").action(async (domain, options) => {
+memoryProgram.command("query").argument("[domain]", "expertise domain to query (or --all for all)").option("--type <type>", "filter by record type").option("--classification <classification>", "filter by classification").option("--plan <plan>", "filter by plan reference (e.g., @sam/api-design)").option("--all", "show all domains").description("Query expertise records (use --all to see all domains)").action(async (domain, options) => {
   const { readConfig: readConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
   const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2, filterByType: filterByType2, filterByClassification: filterByClassification2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
   const config = await readConfig3();
@@ -4308,6 +4308,9 @@ memoryProgram.command("query").argument("[domain]", "expertise domain to query (
     process.exitCode = 1;
     return;
   }
+  function filterByPlan(records, planRef) {
+    return records.filter((r) => r.plan_refs && r.plan_refs.some((ref) => ref.includes(planRef)));
+  }
   function formatRecord(r) {
     switch (r.type) {
       case "convention":
@@ -4328,6 +4331,9 @@ memoryProgram.command("query").argument("[domain]", "expertise domain to query (
     }
     if (options.classification) {
       records = filterByClassification2(records, options.classification);
+    }
+    if (options.plan) {
+      records = filterByPlan(records, options.plan);
     }
     if (records.length > 0) {
       console.log(`
