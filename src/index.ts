@@ -46,15 +46,6 @@ function exec(cmd: string, options: any = {}): string {
   }
 }
 
-// Secure command execution using array args (prevents shell injection)
-function execSafe(command: string, args: string[]): string {
-  try {
-    return execFileSync(command, args, { encoding: 'utf-8' });
-  } catch (e) {
-    return '';
-  }
-}
-
 // Check if tmux is installed
 function checkTmux(): boolean {
   try {
