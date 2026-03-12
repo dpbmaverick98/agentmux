@@ -1,8 +1,32 @@
 import chalk from "chalk";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { getPlan } from "../storage/registry.ts";
 import { addMemoryRef, getLatestVersion, getVersion } from "../storage/manifest.ts";
 import { getPlanDir } from "../storage/config.ts";
+import { findAndUpdateMemoryPlanRef, readExpertiseFile } from "../../memory/storage/store.ts";
+import { getExpertisePath, readConfig } from "../../memory/storage/config.ts";
+
+async function resolveMemoryRecord(memoryRef: string): Promise<string | null> {
+  const config = await readConfig();
+  
+  for (const domain of config.domains) {
+    const filePath = getExpertisePath(domain);
+    const records = await readExpertiseFile(filePath);
+    const record = records.find(r => r.id === memoryRef);
+    
+    if (record) {
+      switch (record.type) {
+        case "convention":
+          return `[${domain}] ${record.content}`;
+        case "failure":
+          return `[${domain}] ${record.description} → ${record.resolution}`;
+        case "decision":
+          return `[${domain}] ${record.title}: ${record.rationale}`;
+      }
+    }
+  }
+  return null;
+}
 
 export async function linkMemory(planName: string, memoryRef: string, version?: string): Promise<void> {
   const plan = getPlan(planName);
@@ -30,7 +54,10 @@ export async function linkMemory(planName: string, memoryRef: string, version?: 
   
   addMemoryRef(plan.name, targetVersion, memoryRef);
   
-  console.log(chalk.green(`✓ Linked ${memoryRef} to ${plan.name}@${targetVersion}`));
+  const planRef = `${plan.name}:${targetVersion}`;
+  await findAndUpdateMemoryPlanRef(memoryRef, planRef);
+  
+  console.log(chalk.green(`✓ Linked ${memoryRef} to ${planRef} (bidirectional)`));
 }
 
 export async function showPlanWithMemory(name: string): Promise<void> {
@@ -62,15 +89,14 @@ export async function showPlanWithMemory(name: string): Promise<void> {
   if (latest.memory_refs.length > 0) {
     console.log(chalk.cyan(`\nLinked Memories (${latest.memory_refs.length}):`));
     for (const ref of latest.memory_refs) {
-      console.log(chalk.gray(`  • ${ref}`));
+      const resolved = await resolveMemoryRecord(ref);
+      if (resolved) {
+        console.log(chalk.gray(`  • ${ref}: ${resolved}`));
+      } else {
+        console.log(chalk.gray(`  • ${ref} (not found)`));
+      }
     }
   }
   console.log(chalk.bold("\n---\n"));
   console.log(content);
-  
-  if (latest.memory_refs.length > 0) {
-    console.log(chalk.bold("\n---\n"));
-    console.log(chalk.cyan("Linked Memory Records:"));
-    console.log(chalk.gray("(Use 'am memory query --all' to see full records)\n"));
-  }
 }

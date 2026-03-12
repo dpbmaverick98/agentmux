@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { symlinkSync, existsSync as fsExists, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, symlinkSync, unlinkSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { getManifestPath, ensurePlanDir, getPlanDir, getCurrentSymlinkPath, getAgentName } from "./config.ts";
+import { atomicWrite } from "./util.ts";
 
 export interface ManifestEntry {
   version: string;
@@ -83,21 +83,6 @@ export function addVersion(
 
 function generateHash(content: string): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 8);
-}
-
-function atomicWrite(path: string, content: string): void {
-  const tmpPath = `${path}.tmp.${Date.now()}`;
-  writeFileSync(tmpPath, content, "utf-8");
-  try {
-    const { renameSync } = require("node:fs");
-    renameSync(tmpPath, path);
-  } catch (err) {
-    try {
-      const { unlinkSync } = require("node:fs");
-      unlinkSync(tmpPath);
-    } catch {}
-    throw err;
-  }
 }
 
 export function addMemoryRef(planName: string, version: string, memoryRef: string): void {

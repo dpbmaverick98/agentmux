@@ -2212,21 +2212,6 @@ function stringEncaseCRLFWithFirstIndex(string, prefix, postfix, index) {
   return returnValue;
 }
 
-// src/memory/storage/store.ts
-import {
-  appendFile,
-  readFile,
-  rename,
-  stat,
-  unlink,
-  writeFile
-} from "node:fs/promises";
-async function createExpertiseFile2(filePath) {
-  await writeFile(filePath, "", ENCODING);
-}
-var ENCODING = "utf-8";
-var init_store = () => {};
-
 // src/memory/storage/config.ts
 var exports_config = {};
 __export(exports_config, {
@@ -2341,32 +2326,39 @@ var init_config = __esm(() => {
 });
 
 // src/memory/storage/store.ts
-var exports_store = {};
-__export(exports_store, {
-  writeExpertiseFile: () => writeExpertiseFile,
-  readExpertiseFile: () => readExpertiseFile,
-  getFileModTime: () => getFileModTime,
-  generateRecordId: () => generateRecordId,
-  findDuplicate: () => findDuplicate,
-  filterByType: () => filterByType,
-  filterByClassification: () => filterByClassification,
-  createExpertiseFile: () => createExpertiseFile3,
-  countRecords: () => countRecords,
-  appendRecord: () => appendRecord
-});
 import { createHash } from "node:crypto";
 import {
-  appendFile as appendFile2,
-  readFile as readFile2,
-  rename as rename2,
-  stat as stat2,
-  unlink as unlink2,
-  writeFile as writeFile2
+  appendFile,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile
 } from "node:fs/promises";
+async function findAndUpdateMemoryPlanRef(memoryRef, planRef) {
+  const { readConfig: readConfig2 } = await Promise.resolve().then(() => (init_config(), exports_config));
+  const config = await readConfig2();
+  for (const domain of config.domains) {
+    const filePath = getExpertisePath(domain);
+    const records = await readExpertiseFile(filePath);
+    const record = findRecordById(records, memoryRef);
+    if (record) {
+      if (!record.plan_refs) {
+        record.plan_refs = [];
+      }
+      if (!record.plan_refs.includes(planRef)) {
+        record.plan_refs.push(planRef);
+        await writeExpertiseFile(filePath, records);
+      }
+      return true;
+    }
+  }
+  return false;
+}
 async function readExpertiseFile(filePath) {
   let content;
   try {
-    content = await readFile2(filePath, ENCODING2);
+    content = await readFile(filePath, ENCODING);
   } catch {
     return [];
   }
@@ -2393,9 +2385,228 @@ function generateRecordId(record) {
   }
   return `am-${createHash("sha256").update(key).digest("hex").slice(0, 6)}`;
 }
+async function createExpertiseFile2(filePath) {
+  await writeFile(filePath, "", ENCODING);
+}
+async function writeExpertiseFile(filePath, records) {
+  for (const r of records) {
+    if (!r.id) {
+      r.id = generateRecordId(r);
+    }
+  }
+  const content = records.map((r) => JSON.stringify(r)).join(`
+`) + (records.length > 0 ? `
+` : "");
+  const tmpPath = `${filePath}.tmp.${Date.now()}`;
+  await writeFile(tmpPath, content, ENCODING);
+  try {
+    await rename(tmpPath, filePath);
+  } catch (err) {
+    try {
+      await unlink(tmpPath);
+    } catch {}
+    throw err;
+  }
+}
+function findRecordById(records, id) {
+  return records.find((r) => r.id === id) || null;
+}
+var ENCODING = "utf-8";
+var init_store = __esm(() => {
+  init_config();
+});
+
+// src/memory/storage/config.ts
+var exports_config2 = {};
+__export(exports_config2, {
+  writeConfig: () => writeConfig2,
+  readConfig: () => readConfig2,
+  getMulchDir: () => getMulchDir2,
+  getExpertisePath: () => getExpertisePath2,
+  getExpertiseDir: () => getExpertiseDir2,
+  findAndSetAgentMuxDir: () => findAndSetAgentMuxDir2,
+  ensureExpertiseDir: () => ensureExpertiseDir2,
+  createExpertiseFile: () => createExpertiseFile2,
+  addDomain: () => addDomain2
+});
+import { existsSync as existsSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname as dirname2, join as join2 } from "node:path";
+function findAgentMuxDir2(startDir = process.cwd()) {
+  let currentDir = startDir;
+  const root = "/";
+  while (currentDir !== root) {
+    const candidate = join2(currentDir, ".agentmux");
+    if (existsSync2(candidate)) {
+      return candidate;
+    }
+    currentDir = dirname2(currentDir);
+  }
+  return null;
+}
+function getAgentMuxDir2() {
+  if (cachedAgentMuxDir2) {
+    return cachedAgentMuxDir2;
+  }
+  const found = findAgentMuxDir2();
+  if (found) {
+    cachedAgentMuxDir2 = found;
+    return found;
+  }
+  const cwd = process.cwd();
+  const defaultDir = join2(cwd, ".agentmux");
+  cachedAgentMuxDir2 = defaultDir;
+  return defaultDir;
+}
+function findAndSetAgentMuxDir2(startDir) {
+  const found = findAgentMuxDir2(startDir);
+  if (found) {
+    cachedAgentMuxDir2 = found;
+    return found;
+  }
+  throw new Error("No .agentmux/ directory found. Run 'am memory init' first.");
+}
+function getExpertiseDir2() {
+  return EXPERTISE_DIR2;
+}
+function getExpertisePath2(domain) {
+  return join2(EXPERTISE_DIR2, `${domain}.jsonl`);
+}
+function getMulchDir2() {
+  return AGENTMUX_DIR2;
+}
+async function ensureExpertiseDir2() {
+  const { mkdir } = await import("node:fs/promises");
+  if (!existsSync2(EXPERTISE_DIR2)) {
+    const agentMuxDir = getAgentMuxDir2();
+    if (!existsSync2(agentMuxDir)) {
+      await mkdir(agentMuxDir, { recursive: true });
+    }
+    await mkdir(EXPERTISE_DIR2, { recursive: true });
+  }
+}
+async function readConfig2() {
+  await ensureExpertiseDir2();
+  try {
+    const content = readFileSync2(CONFIG_PATH2, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return DEFAULT_CONFIG2;
+  }
+}
+async function writeConfig2(config) {
+  await ensureExpertiseDir2();
+  writeFileSync2(CONFIG_PATH2, JSON.stringify(config, null, 2), "utf-8");
+}
+async function addDomain2(domain) {
+  const config = await readConfig2();
+  if (!config.domains.includes(domain)) {
+    config.domains.push(domain);
+    await writeConfig2(config);
+  }
+  const { mkdir } = await import("node:fs/promises");
+  const filePath = getExpertisePath2(domain);
+  if (!existsSync2(filePath)) {
+    await createExpertiseFile(filePath);
+  }
+}
+var cachedAgentMuxDir2 = null, AGENTMUX_DIR2, EXPERTISE_DIR2, CONFIG_PATH2, DEFAULT_CONFIG2;
+var init_config2 = __esm(() => {
+  init_store();
+  AGENTMUX_DIR2 = getAgentMuxDir2();
+  EXPERTISE_DIR2 = join2(AGENTMUX_DIR2, "expertise");
+  CONFIG_PATH2 = join2(AGENTMUX_DIR2, "config.json");
+  DEFAULT_CONFIG2 = {
+    domains: ["project", "tasks", "decisions"],
+    governance: {
+      max_entries: 100,
+      classification_defaults: {
+        shelf_life: {
+          tactical: 14,
+          observational: 30
+        }
+      }
+    }
+  };
+});
+
+// src/memory/storage/store.ts
+var exports_store = {};
+__export(exports_store, {
+  writeExpertiseFile: () => writeExpertiseFile2,
+  readExpertiseFile: () => readExpertiseFile2,
+  getFileModTime: () => getFileModTime,
+  generateRecordId: () => generateRecordId2,
+  findRecordById: () => findRecordById2,
+  findDuplicate: () => findDuplicate,
+  findAndUpdateMemoryPlanRef: () => findAndUpdateMemoryPlanRef2,
+  filterByType: () => filterByType,
+  filterByClassification: () => filterByClassification,
+  createExpertiseFile: () => createExpertiseFile3,
+  countRecords: () => countRecords,
+  appendRecord: () => appendRecord
+});
+import { createHash as createHash2 } from "node:crypto";
+import {
+  appendFile as appendFile2,
+  readFile as readFile2,
+  rename as rename2,
+  stat as stat2,
+  unlink as unlink2,
+  writeFile as writeFile2
+} from "node:fs/promises";
+async function findAndUpdateMemoryPlanRef2(memoryRef, planRef) {
+  const { readConfig: readConfig3 } = await Promise.resolve().then(() => (init_config(), exports_config));
+  const config = await readConfig3();
+  for (const domain of config.domains) {
+    const filePath = getExpertisePath(domain);
+    const records = await readExpertiseFile2(filePath);
+    const record = findRecordById2(records, memoryRef);
+    if (record) {
+      if (!record.plan_refs) {
+        record.plan_refs = [];
+      }
+      if (!record.plan_refs.includes(planRef)) {
+        record.plan_refs.push(planRef);
+        await writeExpertiseFile2(filePath, records);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+async function readExpertiseFile2(filePath) {
+  let content;
+  try {
+    content = await readFile2(filePath, ENCODING2);
+  } catch {
+    return [];
+  }
+  const records = [];
+  const lines = content.split(`
+`).filter((line) => line.trim().length > 0);
+  for (const line of lines) {
+    records.push(JSON.parse(line));
+  }
+  return records;
+}
+function generateRecordId2(record) {
+  let key;
+  switch (record.type) {
+    case "convention":
+      key = `convention:${record.content}`;
+      break;
+    case "failure":
+      key = `failure:${record.description}`;
+      break;
+    case "decision":
+      key = `decision:${record.title}`;
+      break;
+  }
+  return `am-${createHash2("sha256").update(key).digest("hex").slice(0, 6)}`;
+}
 async function appendRecord(filePath, record) {
   if (!record.id) {
-    record.id = generateRecordId(record);
+    record.id = generateRecordId2(record);
   }
   const line = `${JSON.stringify(record)}
 `;
@@ -2412,10 +2623,10 @@ async function getFileModTime(filePath) {
     return null;
   }
 }
-async function writeExpertiseFile(filePath, records) {
+async function writeExpertiseFile2(filePath, records) {
   for (const r of records) {
     if (!r.id) {
-      r.id = generateRecordId(r);
+      r.id = generateRecordId2(r);
     }
   }
   const content = records.map((r) => JSON.stringify(r)).join(`
@@ -2466,8 +2677,13 @@ function findDuplicate(existing, newRecord) {
 function countRecords(records) {
   return records.length;
 }
+function findRecordById2(records, id) {
+  return records.find((r) => r.id === id) || null;
+}
 var ENCODING2 = "utf-8";
-var init_store2 = () => {};
+var init_store2 = __esm(() => {
+  init_config();
+});
 
 // src/memory/schema/types.ts
 var exports_types = {};
@@ -2630,99 +2846,101 @@ var init_source = __esm(() => {
 });
 
 // src/plan/storage/config.ts
-import { existsSync as existsSync2, mkdirSync } from "node:fs";
-import { join as join2, dirname as dirname2 } from "node:path";
-function findAgentMuxDir2(startDir = process.cwd()) {
+import { existsSync as existsSync3, mkdirSync } from "node:fs";
+import { join as join3, dirname as dirname3 } from "node:path";
+function findAgentMuxDir3(startDir = process.cwd()) {
   let currentDir = startDir;
   const root = "/";
   while (currentDir !== root) {
-    const candidate = join2(currentDir, ".agentmux");
-    if (existsSync2(candidate)) {
+    const candidate = join3(currentDir, ".agentmux");
+    if (existsSync3(candidate)) {
       return candidate;
     }
-    currentDir = dirname2(currentDir);
+    currentDir = dirname3(currentDir);
   }
   return null;
 }
-function getAgentMuxDir2() {
-  if (cachedAgentMuxDir2) {
-    return cachedAgentMuxDir2;
+function getAgentMuxDir3() {
+  if (cachedAgentMuxDir3) {
+    return cachedAgentMuxDir3;
   }
-  const found = findAgentMuxDir2();
+  const found = findAgentMuxDir3();
   if (found) {
-    cachedAgentMuxDir2 = found;
+    cachedAgentMuxDir3 = found;
     return found;
   }
   const cwd = process.cwd();
-  const defaultDir = join2(cwd, ".agentmux");
-  cachedAgentMuxDir2 = defaultDir;
+  const defaultDir = join3(cwd, ".agentmux");
+  cachedAgentMuxDir3 = defaultDir;
   return defaultDir;
 }
 function getPlansDir() {
   return PLANS_DIR;
 }
 function getPlanDir(name) {
-  return join2(PLANS_DIR, name);
+  return join3(PLANS_DIR, name);
 }
 function getManifestPath(planName) {
-  return join2(PLANS_DIR, planName, "manifest.jsonl");
+  return join3(PLANS_DIR, planName, "manifest.jsonl");
 }
 function getVersionPath(planName, version, hash) {
-  return join2(PLANS_DIR, planName, `v${version}-${hash}.md`);
+  return join3(PLANS_DIR, planName, `v${version}-${hash}.md`);
 }
 function getCurrentSymlinkPath(planName) {
-  return join2(PLANS_DIR, planName, "current.md");
+  return join3(PLANS_DIR, planName, "current.md");
 }
 function ensurePlansDir() {
-  if (!existsSync2(PLANS_DIR)) {
+  if (!existsSync3(PLANS_DIR)) {
     mkdirSync(PLANS_DIR, { recursive: true });
   }
 }
 function ensurePlanDir(name) {
   const planDir = getPlanDir(name);
-  if (!existsSync2(planDir)) {
+  if (!existsSync3(planDir)) {
     mkdirSync(planDir, { recursive: true });
   }
 }
 function getAgentName() {
   return process.env.AGENTMUX_AGENT || "unknown";
 }
-var cachedAgentMuxDir2 = null, AGENTMUX_DIR2, PLANS_DIR;
-var init_config2 = __esm(() => {
-  AGENTMUX_DIR2 = getAgentMuxDir2();
-  PLANS_DIR = join2(AGENTMUX_DIR2, "plans");
+var cachedAgentMuxDir3 = null, AGENTMUX_DIR3, PLANS_DIR;
+var init_config3 = __esm(() => {
+  AGENTMUX_DIR3 = getAgentMuxDir3();
+  PLANS_DIR = join3(AGENTMUX_DIR3, "plans");
 });
 
+// src/plan/storage/util.ts
+import { renameSync, unlinkSync, writeFileSync as writeFileSync3 } from "node:fs";
+function atomicWrite(path, content) {
+  const tmpPath = `${path}.tmp.${Date.now()}`;
+  writeFileSync3(tmpPath, content, "utf-8");
+  try {
+    renameSync(tmpPath, path);
+  } catch (err) {
+    try {
+      unlinkSync(tmpPath);
+    } catch {}
+    throw err;
+  }
+}
+var init_util = () => {};
+
 // src/plan/storage/registry.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { renameSync } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "node:fs";
 function getIndexPath() {
   return `${getPlansDir()}/index.jsonl`;
 }
 function ensureIndex() {
   ensurePlansDir();
   const indexPath = getIndexPath();
-  if (!existsSync3(indexPath)) {
-    writeFileSync2(indexPath, "", "utf-8");
-  }
-}
-function atomicWrite(path, content) {
-  const tmpPath = `${path}.tmp.${Date.now()}`;
-  writeFileSync2(tmpPath, content, "utf-8");
-  try {
-    renameSync(tmpPath, path);
-  } catch (err) {
-    try {
-      const { unlinkSync } = __require("node:fs");
-      unlinkSync(tmpPath);
-    } catch {}
-    throw err;
+  if (!existsSync4(indexPath)) {
+    writeFileSync4(indexPath, "", "utf-8");
   }
 }
 function readIndex() {
   ensureIndex();
   const indexPath = getIndexPath();
-  const content = readFileSync2(indexPath, "utf-8");
+  const content = readFileSync3(indexPath, "utf-8");
   if (!content.trim())
     return [];
   const entries = [];
@@ -2780,7 +2998,8 @@ function createPlan(name) {
   return entry;
 }
 var init_registry = __esm(() => {
-  init_config2();
+  init_config3();
+  init_util();
 });
 
 // src/plan/commands/init.ts
@@ -2825,18 +3044,17 @@ Plans:
 var init_init = __esm(() => {
   init_source();
   init_registry();
-  init_config2();
+  init_config3();
 });
 
 // src/plan/storage/manifest.ts
-import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "node:fs";
-import { symlinkSync, unlinkSync } from "node:fs";
-import { createHash as createHash2 } from "node:crypto";
+import { existsSync as existsSync5, readFileSync as readFileSync4, symlinkSync, unlinkSync as unlinkSync2 } from "node:fs";
+import { createHash as createHash3 } from "node:crypto";
 function readManifest(planName) {
   const manifestPath = getManifestPath(planName);
-  if (!existsSync4(manifestPath))
+  if (!existsSync5(manifestPath))
     return [];
-  const content = readFileSync3(manifestPath, "utf-8");
+  const content = readFileSync4(manifestPath, "utf-8");
   if (!content.trim())
     return [];
   const entries = [];
@@ -2855,7 +3073,7 @@ function writeManifest(planName, entries) {
   const content = entries.map((e) => JSON.stringify(e)).join(`
 `) + `
 `;
-  atomicWrite2(manifestPath, content);
+  atomicWrite(manifestPath, content);
 }
 function getVersionHistory(planName) {
   return readManifest(planName);
@@ -2889,21 +3107,7 @@ function addVersion(planName, message, content) {
   return entry;
 }
 function generateHash(content) {
-  return createHash2("sha256").update(content).digest("hex").slice(0, 8);
-}
-function atomicWrite2(path, content) {
-  const tmpPath = `${path}.tmp.${Date.now()}`;
-  writeFileSync3(tmpPath, content, "utf-8");
-  try {
-    const { renameSync: renameSync2 } = __require("node:fs");
-    renameSync2(tmpPath, path);
-  } catch (err) {
-    try {
-      const { unlinkSync: unlinkSync2 } = __require("node:fs");
-      unlinkSync2(tmpPath);
-    } catch {}
-    throw err;
-  }
+  return createHash3("sha256").update(content).digest("hex").slice(0, 8);
 }
 function addMemoryRef(planName, version, memoryRef) {
   const history = readManifest(planName);
@@ -2920,13 +3124,14 @@ function updateCurrentSymlink(planName, version, hash) {
   const planDir = getPlanDir(planName);
   const versionFile = `v${version}-${hash}.md`;
   const symlinkPath = getCurrentSymlinkPath(planName);
-  if (existsSync4(symlinkPath)) {
-    unlinkSync(symlinkPath);
+  if (existsSync5(symlinkPath)) {
+    unlinkSync2(symlinkPath);
   }
   symlinkSync(versionFile, symlinkPath);
 }
 var init_manifest = __esm(() => {
-  init_config2();
+  init_config3();
+  init_util();
 });
 
 // src/plan/commands/commit.ts
@@ -2936,7 +3141,7 @@ __export(exports_commit, {
   logPlan: () => logPlan,
   commitPlan: () => commitPlan
 });
-import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync5, writeFileSync as writeFileSync5 } from "node:fs";
 async function commitPlan(name, message) {
   const plan = getPlan(name);
   if (!plan) {
@@ -2949,12 +3154,12 @@ async function commitPlan(name, message) {
   const rootPlanPath = `${process.cwd()}/plan.md`;
   let content;
   let sourcePath;
-  if (existsSync5(draftPath)) {
+  if (existsSync6(draftPath)) {
     sourcePath = draftPath;
-    content = readFileSync4(draftPath, "utf-8");
-  } else if (existsSync5(rootPlanPath)) {
+    content = readFileSync5(draftPath, "utf-8");
+  } else if (existsSync6(rootPlanPath)) {
     sourcePath = rootPlanPath;
-    content = readFileSync4(rootPlanPath, "utf-8");
+    content = readFileSync5(rootPlanPath, "utf-8");
   } else {
     console.log(source_default2.red("No plan content found"));
     console.log(source_default2.gray("Create draft.md in plan dir or plan.md in project root"));
@@ -2962,7 +3167,7 @@ async function commitPlan(name, message) {
   }
   const entry = addVersion(plan.name, message, content);
   const versionPath = getVersionPath(plan.name, entry.version, entry.hash);
-  writeFileSync4(versionPath, content, "utf-8");
+  writeFileSync5(versionPath, content, "utf-8");
   try {
     updateCurrentSymlink(plan.name, entry.version, entry.hash);
   } catch {
@@ -3011,11 +3216,11 @@ async function showPlan(name) {
     return;
   }
   const versionPath = getVersionPath(plan.name, latest.version, latest.hash);
-  if (!existsSync5(versionPath)) {
+  if (!existsSync6(versionPath)) {
     console.log(source_default2.red(`Version file not found: ${versionPath}`));
     return;
   }
-  const content = readFileSync4(versionPath, "utf-8");
+  const content = readFileSync5(versionPath, "utf-8");
   console.log(source_default2.bold(`
 ${plan.name} - ${latest.version}
 `));
@@ -3034,7 +3239,7 @@ var init_commit = __esm(() => {
   init_source();
   init_registry();
   init_manifest();
-  init_config2();
+  init_config3();
 });
 
 // src/plan/commands/link.ts
@@ -3043,7 +3248,26 @@ __export(exports_link, {
   showPlanWithMemory: () => showPlanWithMemory,
   linkMemory: () => linkMemory
 });
-import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync6 } from "node:fs";
+async function resolveMemoryRecord(memoryRef) {
+  const config = await readConfig();
+  for (const domain of config.domains) {
+    const filePath = getExpertisePath(domain);
+    const records = await readExpertiseFile(filePath);
+    const record = records.find((r) => r.id === memoryRef);
+    if (record) {
+      switch (record.type) {
+        case "convention":
+          return `[${domain}] ${record.content}`;
+        case "failure":
+          return `[${domain}] ${record.description} → ${record.resolution}`;
+        case "decision":
+          return `[${domain}] ${record.title}: ${record.rationale}`;
+      }
+    }
+  }
+  return null;
+}
 async function linkMemory(planName, memoryRef, version) {
   const plan = getPlan(planName);
   if (!plan) {
@@ -3065,7 +3289,9 @@ async function linkMemory(planName, memoryRef, version) {
     return;
   }
   addMemoryRef(plan.name, targetVersion, memoryRef);
-  console.log(source_default2.green(`✓ Linked ${memoryRef} to ${plan.name}@${targetVersion}`));
+  const planRef = `${plan.name}:${targetVersion}`;
+  await findAndUpdateMemoryPlanRef(memoryRef, planRef);
+  console.log(source_default2.green(`✓ Linked ${memoryRef} to ${planRef} (bidirectional)`));
 }
 async function showPlanWithMemory(name) {
   const plan = getPlan(name);
@@ -3079,11 +3305,11 @@ async function showPlanWithMemory(name) {
     return;
   }
   const versionPath = `${getPlanDir(plan.name)}/v${latest.version}-${latest.hash}.md`;
-  if (!existsSync6(versionPath)) {
+  if (!existsSync7(versionPath)) {
     console.log(source_default2.red(`Version file not found: ${versionPath}`));
     return;
   }
-  const content = readFileSync5(versionPath, "utf-8");
+  const content = readFileSync6(versionPath, "utf-8");
   console.log(source_default2.bold(`
 ${plan.name} - ${latest.version}
 `));
@@ -3094,27 +3320,26 @@ ${plan.name} - ${latest.version}
     console.log(source_default2.cyan(`
 Linked Memories (${latest.memory_refs.length}):`));
     for (const ref of latest.memory_refs) {
-      console.log(source_default2.gray(`  • ${ref}`));
+      const resolved = await resolveMemoryRecord(ref);
+      if (resolved) {
+        console.log(source_default2.gray(`  • ${ref}: ${resolved}`));
+      } else {
+        console.log(source_default2.gray(`  • ${ref} (not found)`));
+      }
     }
   }
   console.log(source_default2.bold(`
 ---
 `));
   console.log(content);
-  if (latest.memory_refs.length > 0) {
-    console.log(source_default2.bold(`
----
-`));
-    console.log(source_default2.cyan("Linked Memory Records:"));
-    console.log(source_default2.gray(`(Use 'am memory query --all' to see full records)
-`));
-  }
 }
 var init_link = __esm(() => {
   init_source();
   init_registry();
   init_manifest();
-  init_config2();
+  init_config3();
+  init_store();
+  init_config();
 });
 
 // node_modules/commander/esm.mjs
@@ -3285,7 +3510,7 @@ var source_default = chalk;
 // src/index.ts
 import { spawn, execFileSync } from "child_process";
 import { execSync } from "child_process";
-import fs, { existsSync as existsSync7 } from "fs";
+import fs, { existsSync as existsSync8 } from "fs";
 import path from "path";
 import crypto from "crypto";
 var program2 = new Command;
@@ -3304,7 +3529,7 @@ var AGENT_PANE_MAP = {
   sam: 2,
   wit: 3
 };
-function getAgentMuxDir3() {
+function getAgentMuxDir4() {
   return path.join(process.cwd(), ".agentmux");
 }
 function exec(cmd, options = {}) {
@@ -3386,7 +3611,7 @@ You can now run:`));
   }
 });
 program2.command("init").description("Initialize a new AgentMux project in current directory").action(() => {
-  const agentMuxDir = getAgentMuxDir3();
+  const agentMuxDir = getAgentMuxDir4();
   const currentDir = process.cwd();
   const name = path.basename(currentDir);
   console.log(source_default.blue(`\uD83C\uDF0A Initializing AgentMux project: ${name}`));
@@ -3451,7 +3676,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
 `));
     return;
   }
-  const agentMuxDir = getAgentMuxDir3();
+  const agentMuxDir = getAgentMuxDir4();
   try {
     fs.accessSync(agentMuxDir, fs.constants.F_OK);
   } catch {
@@ -3516,7 +3741,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   spawn("tmux", ["attach", "-t", session], { stdio: "inherit" });
 });
 program2.command("status").description("Show live status with auto-refresh (runs until Ctrl+C)").action(() => {
-  const agentMuxDir = getAgentMuxDir3();
+  const agentMuxDir = getAgentMuxDir4();
   try {
     fs.accessSync(agentMuxDir, fs.constants.F_OK);
   } catch {
@@ -3690,7 +3915,7 @@ program2.command("send <to> <message...>").description("Send a message to anothe
   const session = getSessionName();
   const msg = message.join(" ");
   const from = process.env.AGENTMUX_AGENT || "user";
-  const agentMuxDir = getAgentMuxDir3();
+  const agentMuxDir = getAgentMuxDir4();
   const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}`;
   const timestamp = new Date().toISOString();
   try {
@@ -3930,14 +4155,14 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
 var memoryProgram = new Command;
 memoryProgram.name("memory").description("Structured expertise management for agents").version("1.0.0");
 memoryProgram.command("init").description("Initialize agentmux memory storage").action(async () => {
-  const { existsSync: existsSync8 } = await import("fs");
-  const { ensureExpertiseDir: ensureExpertiseDir2, readConfig: readConfig2, writeConfig: writeConfig2, getExpertisePath: getExpertisePath2 } = await Promise.resolve().then(() => (init_config(), exports_config));
+  const { existsSync: existsSync9 } = await import("fs");
+  const { ensureExpertiseDir: ensureExpertiseDir3, readConfig: readConfig3, writeConfig: writeConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
   const { createExpertiseFile: createExpertiseFile4 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  await ensureExpertiseDir2();
-  const config = await readConfig2();
+  await ensureExpertiseDir3();
+  const config = await readConfig3();
   for (const domain of config.domains) {
-    const filePath = getExpertisePath2(domain);
-    if (!existsSync8(filePath)) {
+    const filePath = getExpertisePath3(domain);
+    if (!existsSync9(filePath)) {
       await createExpertiseFile4(filePath);
     }
   }
@@ -3946,28 +4171,28 @@ memoryProgram.command("init").description("Initialize agentmux memory storage").
   console.log(source_default.dim(`  Storage: .agentmux/expertise/`));
 });
 memoryProgram.command("add").argument("<domain>", "domain to add").description("Add a new expertise domain").action(async (domain) => {
-  const { ensureExpertiseDir: ensureExpertiseDir2, readConfig: readConfig2, writeConfig: writeConfig2, getExpertisePath: getExpertisePath2 } = await Promise.resolve().then(() => (init_config(), exports_config));
+  const { ensureExpertiseDir: ensureExpertiseDir3, readConfig: readConfig3, writeConfig: writeConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
   const { createExpertiseFile: createExpertiseFile4 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  await ensureExpertiseDir2();
-  const config = await readConfig2();
+  await ensureExpertiseDir3();
+  const config = await readConfig3();
   if (config.domains.includes(domain)) {
     console.log(source_default.yellow(`Domain "${domain}" already exists.`));
     return;
   }
   config.domains.push(domain);
-  await writeConfig2(config);
-  const filePath = getExpertisePath2(domain);
+  await writeConfig3(config);
+  const filePath = getExpertisePath3(domain);
   await createExpertiseFile4(filePath);
   console.log(source_default.green(`\u2713 Added domain "${domain}"`));
 });
 memoryProgram.command("record").argument("<domain>", "expertise domain").argument("[content]", "record content").option("--type <type>", "record type", "convention").option("--classification <classification>", "classification level", "tactical").option("--description <description>", "description of the record").option("--resolution <resolution>", "resolution for failure records").option("--title <title>", "title for decision records").option("--rationale <rationale>", "rationale for decision records").option("--tags <tags>", "comma-separated tags").option("--force", "force recording even if duplicate exists").option("--dry-run", "preview what would be recorded without writing").description("Record an expertise record").action(async (domain, content, options) => {
-  const { ensureExpertiseDir: ensureExpertiseDir2, getExpertisePath: getExpertisePath2, readConfig: readConfig2, addDomain: addDomain2 } = await Promise.resolve().then(() => (init_config(), exports_config));
-  const { appendRecord: appendRecord2, findDuplicate: findDuplicate2, readExpertiseFile: readExpertiseFile2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
+  const { ensureExpertiseDir: ensureExpertiseDir3, getExpertisePath: getExpertisePath3, readConfig: readConfig3, addDomain: addDomain3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
+  const { appendRecord: appendRecord2, findDuplicate: findDuplicate2, readExpertiseFile: readExpertiseFile3 } = await Promise.resolve().then(() => (init_store2(), exports_store));
   const { ExpertiseRecord, RecordType, Classification } = await Promise.resolve().then(() => (init_types(), exports_types));
-  await ensureExpertiseDir2();
-  const config = await readConfig2();
+  await ensureExpertiseDir3();
+  const config = await readConfig3();
   if (!config.domains.includes(domain)) {
-    await addDomain2(domain);
+    await addDomain3(domain);
     console.log(source_default.green(`\u2713 Auto-created domain "${domain}"`));
   }
   const recordedBy = process.env.AGENTMUX_AGENT || "unknown";
@@ -4037,10 +4262,10 @@ memoryProgram.command("record").argument("<domain>", "expertise domain").argumen
       process.exitCode = 1;
       return;
   }
-  const filePath = getExpertisePath2(domain);
+  const filePath = getExpertisePath3(domain);
   const dryRun = options.dryRun === true;
   if (dryRun) {
-    const existing = await readExpertiseFile2(filePath);
+    const existing = await readExpertiseFile3(filePath);
     const dup = findDuplicate2(existing, record);
     if (dup && !options.force) {
       console.log(source_default.yellow(`Dry-run: Duplicate ${recordType} already exists in ${domain}. Would skip.`));
@@ -4049,7 +4274,7 @@ memoryProgram.command("record").argument("<domain>", "expertise domain").argumen
     }
     console.log(source_default.dim("  Run without --dry-run to apply changes."));
   } else {
-    const existing = await readExpertiseFile2(filePath);
+    const existing = await readExpertiseFile3(filePath);
     const dup = findDuplicate2(existing, record);
     if (dup && !options.force) {
       console.log(source_default.yellow(`Duplicate ${recordType} already exists in ${domain}. Use --force to add anyway.`));
@@ -4060,9 +4285,9 @@ memoryProgram.command("record").argument("<domain>", "expertise domain").argumen
   }
 });
 memoryProgram.command("query").argument("[domain]", "expertise domain to query (or --all for all)").option("--type <type>", "filter by record type").option("--classification <classification>", "filter by classification").option("--all", "show all domains").description("Query expertise records (use --all to see all domains)").action(async (domain, options) => {
-  const { readConfig: readConfig2, getExpertisePath: getExpertisePath2 } = await Promise.resolve().then(() => (init_config(), exports_config));
-  const { readExpertiseFile: readExpertiseFile2, getFileModTime: getFileModTime2, filterByType: filterByType2, filterByClassification: filterByClassification2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const config = await readConfig2();
+  const { readConfig: readConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
+  const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2, filterByType: filterByType2, filterByClassification: filterByClassification2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
+  const config = await readConfig3();
   const domainsToQuery = [];
   if (options.all) {
     domainsToQuery.push(...config.domains);
@@ -4095,8 +4320,8 @@ memoryProgram.command("query").argument("[domain]", "expertise domain to query (
     }
   }
   for (const d of domainsToQuery) {
-    const filePath = getExpertisePath2(d);
-    let records = await readExpertiseFile2(filePath);
+    const filePath = getExpertisePath3(d);
+    let records = await readExpertiseFile3(filePath);
     const lastUpdated = await getFileModTime2(filePath);
     if (options.type) {
       records = filterByType2(records, options.type);
@@ -4137,9 +4362,9 @@ memoryProgram.command("query").argument("[domain]", "expertise domain to query (
   }
 });
 memoryProgram.command("prime").argument("[domains...]", "domain(s) to include").option("--compact", "condensed output (default)").option("--full", "include full details").option("--exclude <domains...>", "domains to exclude").description("Generate agent-optimized context for injection").action(async (domainsArg, options) => {
-  const { readConfig: readConfig2, getExpertisePath: getExpertisePath2 } = await Promise.resolve().then(() => (init_config(), exports_config));
-  const { readExpertiseFile: readExpertiseFile2, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const config = await readConfig2();
+  const { readConfig: readConfig3, getExpertisePath: getExpertisePath3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
+  const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
+  const config = await readConfig3();
   const excluded = options.exclude || [];
   let targetDomains = domainsArg && domainsArg.length > 0 ? domainsArg.filter((d) => !excluded.includes(d)) : config.domains.filter((d) => !excluded.includes(d));
   if (targetDomains.length === 0) {
@@ -4148,8 +4373,8 @@ memoryProgram.command("prime").argument("[domains...]", "domain(s) to include").
   }
   const sections = [];
   for (const domain of targetDomains) {
-    const filePath = getExpertisePath2(domain);
-    const records = await readExpertiseFile2(filePath);
+    const filePath = getExpertisePath3(domain);
+    const records = await readExpertiseFile3(filePath);
     const lastUpdated = await getFileModTime2(filePath);
     if (records.length === 0)
       continue;
@@ -4219,11 +4444,11 @@ memoryProgram.command("prime").argument("[domains...]", "domain(s) to include").
   }
 });
 memoryProgram.command("status").description("Show memory status - record counts and last updated").action(async () => {
-  const { readConfig: readConfig2, getExpertisePath: getExpertisePath2, getExpertiseDir: getExpertiseDir2 } = await Promise.resolve().then(() => (init_config(), exports_config));
-  const { readExpertiseFile: readExpertiseFile2, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
-  const config = await readConfig2();
-  const expertiseDir = getExpertiseDir2();
-  if (!existsSync7(expertiseDir)) {
+  const { readConfig: readConfig3, getExpertisePath: getExpertisePath3, getExpertiseDir: getExpertiseDir3 } = await Promise.resolve().then(() => (init_config2(), exports_config2));
+  const { readExpertiseFile: readExpertiseFile3, getFileModTime: getFileModTime2 } = await Promise.resolve().then(() => (init_store2(), exports_store));
+  const config = await readConfig3();
+  const expertiseDir = getExpertiseDir3();
+  if (!existsSync8(expertiseDir)) {
     console.log(source_default.yellow("No .agentmux/expertise/ found. Run `am memory init` first."));
     return;
   }
@@ -4232,8 +4457,8 @@ memoryProgram.command("status").description("Show memory status - record counts 
 `));
   let totalRecords = 0;
   for (const domain of config.domains) {
-    const filePath = getExpertisePath2(domain);
-    const records = await readExpertiseFile2(filePath);
+    const filePath = getExpertisePath3(domain);
+    const records = await readExpertiseFile3(filePath);
     const lastUpdated = await getFileModTime2(filePath);
     totalRecords += records.length;
     const countStr = source_default.white(`${records.length} records`);

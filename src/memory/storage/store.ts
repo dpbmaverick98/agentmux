@@ -8,8 +8,35 @@ import {
   writeFile,
 } from "node:fs/promises";
 import type { ExpertiseRecord, RecordType } from "../schema/types.ts";
+import { getExpertisePath } from "./config.ts";
 
 const ENCODING = "utf-8";
+
+export async function findAndUpdateMemoryPlanRef(
+  memoryRef: string,
+  planRef: string,
+): Promise<boolean> {
+  const { readConfig } = await import("./config.ts");
+  const config = await readConfig();
+  
+  for (const domain of config.domains) {
+    const filePath = getExpertisePath(domain);
+    const records = await readExpertiseFile(filePath);
+    const record = findRecordById(records, memoryRef);
+    
+    if (record) {
+      if (!record.plan_refs) {
+        record.plan_refs = [];
+      }
+      if (!record.plan_refs.includes(planRef)) {
+        record.plan_refs.push(planRef);
+        await writeExpertiseFile(filePath, records);
+      }
+      return true;
+    }
+  }
+  return false;
+}
 
 export async function readExpertiseFile(
   filePath: string,
@@ -149,4 +176,11 @@ export function findDuplicate(
 
 export function countRecords(records: ExpertiseRecord[]): number {
   return records.length;
+}
+
+export function findRecordById(
+  records: ExpertiseRecord[],
+  id: string,
+): ExpertiseRecord | null {
+  return records.find(r => r.id === id) || null;
 }

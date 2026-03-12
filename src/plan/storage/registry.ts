@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { renameSync } from "node:fs";
 import { getPlansDir, ensurePlansDir, getAgentName } from "./config.ts";
+import { atomicWrite } from "./util.ts";
 
 export interface PlanRegistryEntry {
   name: string;
@@ -18,20 +18,6 @@ function ensureIndex(): void {
   const indexPath = getIndexPath();
   if (!existsSync(indexPath)) {
     writeFileSync(indexPath, "", "utf-8");
-  }
-}
-
-function atomicWrite(path: string, content: string): void {
-  const tmpPath = `${path}.tmp.${Date.now()}`;
-  writeFileSync(tmpPath, content, "utf-8");
-  try {
-    renameSync(tmpPath, path);
-  } catch (err) {
-    try {
-      const { unlinkSync } = require("node:fs");
-      unlinkSync(tmpPath);
-    } catch {}
-    throw err;
   }
 }
 
