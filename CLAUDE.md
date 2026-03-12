@@ -127,3 +127,40 @@ am memory query --all --plan api-design
     ├── v2-def456.md
     └── current.md -> v2    # Symlink to latest
 ```
+
+## Context Injection (Phase 3)
+
+Auto-inject relevant memory into messages when using `--inject` flag:
+
+```bash
+# Send message with context injection (opt-in)
+agentmux send sam "What about the auth flow?" --inject
+
+# Sam sees:
+# 📨 [@nui → @sam]: What about the auth flow?
+# 📎 Context: [decisions] Use JWT tokens: Team decided on JWT for stateful sessions
+```
+
+**How it works:**
+1. Extracts keywords from your message
+2. Matches against memory records by relevance
+3. Injects top 2 most relevant memories
+4. **Default is OFF** - must explicitly use `--inject`
+
+## Timeline Visualization (Phase 4)
+
+View plan evolution and decision history:
+
+```bash
+# Show all plans overview
+am plan timeline
+
+# Show detailed timeline for specific plan
+am plan timeline api-design
+```
+
+**Displays:**
+- Version history with parent references (DAG view)
+- Linked memories per version
+- Agent attribution (who created each version)
+- ASCII art visualization

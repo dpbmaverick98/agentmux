@@ -143,6 +143,7 @@ am memory query decisions --plan api-design
 | `am plan show <name>` | Show current version |
 | `am plan list` | List all plans |
 | `am plan link <name> --memory <ref>` | Link memory to plan |
+| `am plan timeline [name]` | Show ASCII timeline of plan evolution |
 
 **Example Workflow:**
 ```bash
@@ -157,6 +158,22 @@ am plan link api-design --memory am-8f2d
 
 # View with linked memories
 am plan show api-design --with-memory
+
+# View timeline
+am plan timeline api-design
+```
+
+### Context Injection (Phase 3)
+
+Auto-inject relevant memory when messaging other agents:
+
+```bash
+# Send message with context injection
+agentmux send sam "What about auth?" --inject
+
+# Sam sees:
+# 📨 [@nui → @sam]: What about auth?
+# 📎 Context: [decisions] Use JWT tokens: Team familiarity with JWT
 ```
 
 **Spawn Examples:**
