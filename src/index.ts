@@ -5,7 +5,6 @@ import { spawn, execFileSync } from 'child_process';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 
 const program = new Command();
 
@@ -62,38 +61,9 @@ function checkTmux(): boolean {
   }
 }
 
-// Check if jj is installed
-function checkJJ(): boolean {
-  try {
-    execSync('which jj');
-    return true;
-  } catch {
-    console.log(chalk.yellow('⚠️  jj not found. Install with: cargo install jj-cli'));
-    return false;
-  }
-}
-
 // Get tmux session name
 function getSessionName(): string {
   return process.env.AGENTMUX_SESSION || 'agentmux';
-}
-
-// Get JJ state hash for change detection
-function getJJStateHash(agentMuxDir: string): string {
-  try {
-    const jjDir = path.join(agentMuxDir, '.jj');
-    fs.accessSync(jjDir, fs.constants.F_OK);
-
-    // Run jj from the project root (parent of .agentmux/)
-    const projectRoot = path.dirname(agentMuxDir);
-    const log = execSync('jj log --no-graph 2>/dev/null || echo "no-changes"', {
-      cwd: projectRoot,
-      encoding: 'utf-8'
-    });
-    return crypto.createHash('md5').update(log).digest('hex');
-  } catch {
-    return 'no-repo';
-  }
 }
 
 program
@@ -103,7 +73,7 @@ program
 
 program
   .command('install')
-  .description('Install required dependencies (jj, tmux)')
+  .description('Install required dependencies (tmux)')
   .action(() => {
     console.log(chalk.blue('🔧 Installing AgentMux dependencies...\n'));
 
@@ -112,13 +82,12 @@ program
 
     if (platform === 'darwin') {
       console.log(chalk.gray('Detected macOS'));
-      installCmd = 'brew install jj tmux';
+      installCmd = 'brew install tmux';
     } else if (platform === 'linux') {
       console.log(chalk.gray('Detected Linux'));
-      installCmd = 'cargo install jj-cli && sudo apt-get install -y tmux';
+      installCmd = 'sudo apt-get install -y tmux';
     } else {
       console.log(chalk.yellow('⚠️  Unsupported platform. Please install manually:'));
-      console.log(chalk.white('   JJ: cargo install jj-cli'));
       console.log(chalk.white('   tmux: https://github.com/tmux/tmux/wiki/Installing'));
       return;
     }
@@ -134,7 +103,6 @@ program
     } catch (e) {
       console.log(chalk.red('\n❌ Installation failed'));
       console.log(chalk.gray('Try installing manually:'));
-      console.log(chalk.white('   JJ: cargo install jj-cli'));
       console.log(chalk.white('   tmux: brew install tmux (macOS) or apt-get install tmux (Linux)'));
     }
   });
@@ -163,33 +131,6 @@ program
     // Create .agentmux directory structure
     fs.mkdirSync(agentMuxDir, { recursive: true });
     fs.mkdirSync(path.join(agentMuxDir, 'shared'), { recursive: true });
-    fs.mkdirSync(path.join(agentMuxDir, 'skills'), { recursive: true });
-
-    // Initialize JJ in .agentmux/.jj/
-    if (checkJJ()) {
-      try {
-        execSync('jj git init', { cwd: agentMuxDir });
-        console.log(chalk.green('  ✓ JJ initialized in .agentmux/.jj/'));
-
-        // Create symlink in project root for easier JJ access
-        try {
-          const projectRoot = path.dirname(agentMuxDir);
-          const jjSymlinkPath = path.join(projectRoot, '.jj');
-          try {
-            fs.accessSync(jjSymlinkPath);
-          } catch {
-            fs.symlinkSync('.agentmux/.jj', jjSymlinkPath);
-            console.log(chalk.green('  ✓ Created .jj symlink for easier access'));
-          }
-        } catch (e) {
-          // Non-fatal - JJ still works from .agentmux/
-        }
-      } catch (e) {
-        console.log(chalk.yellow('  ⚠️  Failed to initialize JJ'));
-      }
-    } else {
-      console.log(chalk.yellow('\n⚠️  JJ not installed. Install with: brew install jj'));
-    }
 
     // Create shared files
     fs.writeFileSync(path.join(agentMuxDir, 'shared', 'plan.md'), `# Plan for ${name}
@@ -213,7 +154,6 @@ Review and test the implementation
     console.log(chalk.green('\n✅ Project initialized!'));
     console.log(chalk.gray(`\nDirectory structure:`));
     console.log(chalk.white('   .agentmux/'));
-    console.log(chalk.white('   ├── .jj/              # JJ version control'));
     console.log(chalk.white('   └── shared/           # Shared context'));
     console.log(chalk.gray(`\nSkills are installed globally in ~/.claude/skills/`));
     console.log(chalk.gray(`Next step: agentmux start`));
@@ -226,12 +166,9 @@ program
   .option('--sam', 'Enable sam agent', true)
   .option('--wit', 'Enable wit agent', true)
   .action((options: any) => {
-    // Check all dependencies first
-    const hasTmux = checkTmux();
-    const hasJJ = checkJJ();
-
-    if (!hasTmux || !hasJJ) {
-      console.log(chalk.red('\n❌ Missing dependencies!'));
+    // Check tmux dependency
+    if (!checkTmux()) {
+      console.log(chalk.red('\n❌ Missing tmux dependency!'));
       console.log(chalk.white('Run: agentmux install\n'));
       return;
     }
@@ -244,19 +181,6 @@ program
       console.log(chalk.red('\n❌ No .agentmux/ directory found!'));
       console.log(chalk.white('Run: agentmux init\n'));
       return;
-    }
-
-    // Ensure symlink exists (in case user deleted it)
-    const currentDir = process.cwd();
-    try {
-      const jjSymlinkPath = path.join(currentDir, '.jj');
-      fs.accessSync(jjSymlinkPath);
-    } catch {
-      try {
-        fs.symlinkSync('.agentmux/.jj', path.join(currentDir, '.jj'));
-      } catch {
-        // Ignore errors, not critical
-      }
     }
 
     const session = getSessionName();
@@ -353,8 +277,7 @@ program
       return;
     }
 
-    const hasJJ = checkJJ();
-    let lastState = '';
+    let lastCommitCount = 0;
     let lastUpdateTime = Date.now();
 
     function renderStatus() {
@@ -367,98 +290,49 @@ program
       const secondsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
       process.stdout.write(`${chalk.gray(`⏱️  Last update: ${secondsSinceUpdate}s ago`)}\n\n`);
 
-      // Show JJ changes
-      console.log(chalk.yellow('JJ Changes:'));
-      if (hasJJ) {
+      // Show Recent Commits
+      console.log(chalk.yellow('Recent Commits:'));
+      try {
+        const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
         try {
-          const jjDir = path.join(agentMuxDir, '.jj');
-          try {
-            fs.accessSync(jjDir, fs.constants.F_OK);
-            // Run jj from the project root (parent of .agentmux/)
-            const projectRoot = path.dirname(agentMuxDir);
-            
-            // Get last 10 commits with author info
-            const logOutput = exec('jj log --no-graph -r "ancestors(@) | heads(all())" --limit 10 2>/dev/null || echo ""', {
-              cwd: projectRoot
-            });
-            
-            // Get bookmarks to check push status
-            const bookmarksOutput = exec('jj bookmark list --all 2>/dev/null || echo ""', {
-              cwd: projectRoot
-            });
-            
-            // Parse bookmarks to find which commits are on remote
-            const pushedCommitIds = new Set<string>();
-            if (bookmarksOutput) {
-              bookmarksOutput.split('\n').forEach(line => {
-                // Parse lines like: "fix-jj-symlink: fed4b02d [origin (ahead by 2)]"
-                const match = line.match(/^\s*(\S+):\s+([a-f0-9]+)/);
+          fs.accessSync(commitsPath, fs.constants.F_OK);
+          // Use exec to tail the last 20 lines
+          const tailOutput = exec(`tail -n 20 "${commitsPath}" 2>/dev/null`);
+          if (tailOutput && tailOutput.trim()) {
+            const lines = tailOutput.trim().split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
+            if (lines.length > 0) {
+              lines.reverse().forEach((line: string) => {
+                // Parse format: [timestamp] PENDING/REVIEWED hash @agent: message [| reviewer]
+                const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
                 if (match) {
-                  pushedCommitIds.add(match[2].substring(0, 12));
+                  const [, timestamp, status, hash, agent, message, reviewer] = match;
+                  const isReviewed = status === 'REVIEWED';
+                  const symbol = isReviewed ? '●' : '○';
+                  const agentName = agent.replace('@', '');
+                  const agentColor = agentName === 'nui' ? chalk.cyan :
+                                    agentName === 'sam' ? chalk.green :
+                                    agentName === 'wit' ? chalk.magenta : chalk.white;
+                  
+                  const shortHash = hash.substring(0, 7);
+                  let displayLine = `${shortHash} ${agent}: ${message}`;
+                  if (reviewer) {
+                    displayLine += ` (${reviewer})`;
+                  }
+                  
+                  console.log(`  ${symbol} ${agentColor(displayLine)}`);
                 }
               });
-            }
-            
-            if (logOutput && logOutput.trim()) {
-              const lines = logOutput.split('\n').filter(l => l.trim());
-              if (lines.length > 0) {
-                lines.forEach(line => {
-                  // Parse JJ log format
-                  // Example: @  vqvsryko nui@agentmux.ai 2026-03-11 12:53:40 fix-jj-symlink* ae0c5d4f
-                  //          │  description
-                  const symbolMatch = line.match(/^([○●@◆])	/);
-                  const commitMatch = line.match(/([a-f0-9]{12})/);
-                  const descMatch = line.match(/│	(.*)$/);
-                  
-                  if (symbolMatch && descMatch) {
-                    const commitId = commitMatch ? commitMatch[1] : '';
-                    const isPushed = pushedCommitIds.has(commitId);
-                    const symbol = isPushed ? '●' : '○';
-                    const description = descMatch[1].trim();
-                    const agentColor = description.includes('@nui') ? chalk.cyan :
-                                      description.includes('@sam') ? chalk.green :
-                                      description.includes('@wit') ? chalk.magenta : chalk.white;
-                    
-                    console.log(`  ${symbol} ${agentColor(description)}`);
-                  } else if (line.includes('@') || line.includes('○') || line.includes('●')) {
-                    // Handle commit line with symbol
-                    const commitMatch = line.match(/([a-f0-9]{12})/);
-                    const commitId = commitMatch ? commitMatch[1] : '';
-                    const isPushed = pushedCommitIds.has(commitId);
-                    const symbol = isPushed ? '●' : '○';
-                    
-                    // Extract author tag
-                    const authorMatch = line.match(/@(\w+)/);
-                    const author = authorMatch ? authorMatch[1] : 'unknown';
-                    
-                    // Extract description if available
-                    let displayLine = line;
-                    const descMatch = line.match(/│	(.*)$/);
-                    if (descMatch) {
-                      displayLine = descMatch[1].trim();
-                    }
-                    
-                    const agentColor = author === 'nui' ? chalk.cyan :
-                                      author === 'sam' ? chalk.green :
-                                      author === 'wit' ? chalk.magenta : chalk.white;
-                    
-                    console.log(`  ${symbol} ${agentColor(displayLine)}`);
-                  }
-                });
-              } else {
-                console.log(chalk.gray('  No commits yet'));
-              }
             } else {
               console.log(chalk.gray('  No commits yet'));
             }
-          } catch {
-            console.log(chalk.gray('  JJ repo initializing...'));
+          } else {
+            console.log(chalk.gray('  No commits yet'));
           }
-        } catch (e) {
-          console.log(chalk.gray('  No changes yet'));
+        } catch {
+          console.log(chalk.gray('  No commits yet'));
         }
-      } else {
-        console.log(chalk.gray('  JJ not installed'));
+      } catch (e) {
+        console.log(chalk.gray('  No commits yet'));
       }
 
       // Show tmux session info
@@ -526,13 +400,19 @@ program
     // Initial render
     renderStatus();
 
-    // Set up polling for JJ changes every 3 seconds
+    // Set up polling for commit changes every 3 seconds
     const pollInterval = setInterval(() => {
-      const currentState = getJJStateHash(agentMuxDir);
-
-      if (currentState !== lastState) {
-        lastState = currentState;
-        lastUpdateTime = Date.now();
+      try {
+        const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+        const stats = fs.statSync(commitsPath);
+        const currentCount = stats.mtime.getTime();
+        
+        if (currentCount !== lastCommitCount) {
+          lastCommitCount = currentCount;
+          lastUpdateTime = Date.now();
+        }
+      } catch {
+        // File doesn't exist yet
       }
       // Always re-render to update the idle counter
       renderStatus();
@@ -598,8 +478,144 @@ program
   });
 
 program
+  .command('commit <hash> <message...>')
+  .description('Log a commit with hash and message (use @agent tag)')
+  .action((hash: string, message: string[]) => {
+    const agentMuxDir = getAgentMuxDir();
+    const agent = process.env.AGENTMUX_AGENT || 'user';
+    const msg = message.join(' ');
+    const timestamp = new Date().toISOString();
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      const logEntry = `[${timestamp}] PENDING ${hash} @${agent}: ${msg}\n`;
+      fs.appendFileSync(commitsPath, logEntry);
+      console.log(chalk.green(`✅ Commit logged: ○ ${hash.substring(0, 7)} @${agent}: ${msg}`));
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to log commit'));
+    }
+  });
+
+program
+  .command('review <hash>')
+  .description('Mark a commit as reviewed')
+  .action((hash: string) => {
+    const agentMuxDir = getAgentMuxDir();
+    const reviewer = process.env.AGENTMUX_AGENT || 'user';
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      
+      // Check if file exists
+      try {
+        fs.accessSync(commitsPath, fs.constants.F_OK);
+      } catch {
+        console.log(chalk.red(`❌ No commits found. Did you mean to create it first with 'agentmux commit'?`));
+        return;
+      }
+      
+      const content = fs.readFileSync(commitsPath, 'utf-8');
+      const lines = content.split('\n');
+      
+      // Find the commit by hash
+      let found = false;
+      const updatedLines = lines.map(line => {
+        if (!found && line.includes(` PENDING ${hash}`)) {
+          found = true;
+          // Change PENDING to REVIEWED and add reviewer
+          return line.replace(' PENDING ', ' REVIEWED ') + ` | ${reviewer}`;
+        }
+        return line;
+      });
+      
+      if (found) {
+        fs.writeFileSync(commitsPath, updatedLines.join('\n'));
+        console.log(chalk.green(`✅ Commit ${hash.substring(0, 7)} marked as reviewed by @${reviewer}`));
+      } else {
+        // Check if already reviewed
+        const alreadyReviewed = lines.some(line => line.includes(` REVIEWED ${hash}`));
+        if (alreadyReviewed) {
+          console.log(chalk.yellow(`⚠️  Commit ${hash.substring(0, 7)} is already reviewed`));
+          // Still append this reviewer
+          const updatedLines2 = lines.map(line => {
+            if (line.includes(` REVIEWED ${hash}`) && !line.includes(`| ${reviewer}`) && !line.includes(`, ${reviewer}`)) {
+              return line + `, ${reviewer}`;
+            }
+            return line;
+          });
+          fs.writeFileSync(commitsPath, updatedLines2.join('\n'));
+        } else {
+          console.log(chalk.red(`❌ Commit ${hash.substring(0, 7)} not found`));
+        }
+      }
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to review commit'));
+    }
+  });
+
+program
+  .command('commits')
+  .alias('log')
+  .description('Show recent commits')
+  .action(() => {
+    const agentMuxDir = getAgentMuxDir();
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      try {
+        fs.accessSync(commitsPath, fs.constants.F_OK);
+        const content = fs.readFileSync(commitsPath, 'utf-8');
+        const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+        
+        if (lines.length === 0) {
+          console.log(chalk.gray('No commits yet'));
+          return;
+        }
+        
+        console.log(chalk.blue('\n📋 Recent Commits\n'));
+        lines.reverse().slice(0, 20).forEach((line: string) => {
+          const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
+          if (match) {
+            const [, timestamp, status, hash, agent, message, reviewer] = match;
+            const isReviewed = status === 'REVIEWED';
+            const symbol = isReviewed ? '●' : '○';
+            const shortHash = hash.substring(0, 7);
+            const time = new Date(timestamp);
+            const timeStr = time.toLocaleTimeString();
+            
+            console.log(`  ${symbol} ${shortHash} ${agent}: ${message}`);
+            if (reviewer) {
+              console.log(`     reviewed by: ${reviewer}`);
+            }
+          }
+        });
+        console.log();
+      } catch {
+        console.log(chalk.gray('No commits yet'));
+      }
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to read commits'));
+    }
+  });
+
+program
+  .command('clear-commits')
+  .description('Clear all commit history')
+  .action(() => {
+    const agentMuxDir = getAgentMuxDir();
+    
+    try {
+      const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
+      fs.writeFileSync(commitsPath, '# Commits history cleared\n');
+      console.log(chalk.green('✅ Commit history cleared'));
+    } catch (e) {
+      console.log(chalk.red('❌ Failed to clear commits'));
+    }
+  });
+
+program
   .command('install-deps')
-  .description('Install all required dependencies (claude, opencode, jj, tmux, bun)')
+  .description('Install all required dependencies (claude, opencode, tmux, bun)')
   .action(() => {
     console.log(chalk.blue('🔧 Installing AgentMux dependencies...\n'));
 
@@ -609,7 +625,6 @@ program
       console.log(chalk.gray('   Please install manually:'));
       console.log(chalk.white('   - claude: npm install -g @anthropic-ai/claude-cli'));
       console.log(chalk.white('   - opencode: npm install -g opencode'));
-      console.log(chalk.white('   - jj: brew install jj'));
       console.log(chalk.white('   - tmux: brew install tmux'));
       console.log(chalk.white('   - bun: curl -fsSL https://bun.sh/install | bash'));
       return;
@@ -618,7 +633,6 @@ program
     const dependencies = [
       { name: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-cli' },
       { name: 'opencode', installCmd: 'npm install -g opencode' },
-      { name: 'jj', installCmd: 'brew install jj' },
       { name: 'tmux', installCmd: 'brew install tmux' },
       { name: 'bun', installCmd: 'curl -fsSL https://bun.sh/install | bash' }
     ];
