@@ -4301,7 +4301,7 @@ program2.command("stop").description("Stop the AgentMux tmux session").action(()
 `));
   }
 });
-program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent in a new tmux window (max ${MAX_AGENTS} total agents)`).action((harness, agentName) => {
+program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent in a new tmux pane (use --tab for window)`).option("--pane", "Spawn agent in a new pane (default)", true).option("--no-pane", "Disable pane spawning").option("--tab", "Spawn agent in a new window/tab instead").action((harness, agentName, options) => {
   if (!checkTmux())
     return;
   if (harness !== "opencode" && harness !== "claude") {
@@ -4322,17 +4322,6 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
   }
   try {
     const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#{window_name}"], { encoding: "utf-8" });
-    const windowCount = windowsOutput.trim().split(`
-`).filter((w) => w !== "agentmux").length;
-    if (windowCount >= MAX_AGENTS - AGENTS.length) {
-      console.log(source_default.red(`
-\u274C Agent limit reached (${MAX_AGENTS} max). Kill an agent first.
-`));
-      return;
-    }
-  } catch {}
-  try {
-    const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#{window_name}"], { encoding: "utf-8" });
     const windows = windowsOutput.trim().split(`
 `);
     if (windows.includes(agentName)) {
@@ -4346,14 +4335,36 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
 \uD83C\uDF0A Spawning ${agentName} (${harness})...
 `));
   try {
-    execFileSync("tmux", ["new-window", "-t", `${session}:`, "-n", agentName]);
-    const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
-    execFileSync("tmux", ["send-keys", "-t", `${session}:${agentName}`, cmd, "C-m"]);
-    console.log(source_default.green(`\u2705 Agent "${agentName}" spawned successfully!`));
-    console.log(source_default.gray(`   Window: ${agentName}`));
-    console.log(source_default.gray(`   Harness: ${harness}`));
-    console.log(source_default.gray(`   Switch: Ctrl+B w (then select ${agentName})
+    if (options.tab) {
+      execFileSync("tmux", ["new-window", "-t", `${session}:`, "-n", agentName]);
+      const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
+      execFileSync("tmux", ["send-keys", "-t", `${session}:${agentName}`, cmd, "C-m"]);
+      console.log(source_default.green(`\u2705 Agent "${agentName}" spawned successfully!`));
+      console.log(source_default.gray(`   Window: ${agentName}`));
+      console.log(source_default.gray(`   Harness: ${harness}`));
+      console.log(source_default.gray(`   Switch: Ctrl+B w (then select ${agentName})
 `));
+    } else {
+      const panesOutput = execFileSync("tmux", ["list-panes", "-t", `${session}:0`, "-F", "#{pane_index}"], { encoding: "utf-8" });
+      const paneIndices = panesOutput.trim().split(`
+`).map((p) => parseInt(p.trim(), 10)).filter((n) => !isNaN(n));
+      const lastPaneIndex = Math.max(...paneIndices);
+      execFileSync("tmux", ["split-window", "-t", `${session}:0.${lastPaneIndex}`]);
+      const newPanesOutput = execFileSync("tmux", ["list-panes", "-t", `${session}:0`, "-F", "#{pane_index}"], { encoding: "utf-8" });
+      const newPaneIndices = newPanesOutput.trim().split(`
+`).map((p) => parseInt(p.trim(), 10)).filter((n) => !isNaN(n));
+      const newPaneIndex = Math.max(...newPaneIndices);
+      execFileSync("tmux", ["select-pane", "-t", `${session}:0.${newPaneIndex}`, "-T", `${agentName} (${harness})`]);
+      const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
+      execFileSync("tmux", ["send-keys", "-t", `${session}:0.${newPaneIndex}`, "clear", "C-m"]);
+      execFileSync("tmux", ["send-keys", "-t", `${session}:0.${newPaneIndex}`, cmd, "C-m"]);
+      execFileSync("tmux", ["select-layout", "-t", `${session}:0`, "tiled"]);
+      console.log(source_default.green(`\u2705 Agent "${agentName}" spawned successfully!`));
+      console.log(source_default.gray(`   Pane: ${newPaneIndex}`));
+      console.log(source_default.gray(`   Harness: ${harness}`));
+      console.log(source_default.gray(`   Click or Ctrl+B + arrow to focus
+`));
+    }
   } catch (e) {
     console.log(source_default.red(`
 \u274C Failed to spawn agent: ${e}

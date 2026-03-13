@@ -719,8 +719,11 @@ program
 
 program
   .command('spawn <harness> <agent-name>')
-  .description(`Spawn a new agent in a new tmux window (max ${MAX_AGENTS} total agents)`)
-  .action((harness: string, agentName: string) => {
+  .description(`Spawn a new agent in a new tmux pane (use --tab for window)`)
+  .option('--pane', 'Spawn agent in a new pane (default)', true)
+  .option('--no-pane', 'Disable pane spawning')
+  .option('--tab', 'Spawn agent in a new window/tab instead')
+  .action((harness: string, agentName: string, options: { pane: boolean; tab: boolean }) => {
     if (!checkTmux()) return;
     
     // Validate harness
@@ -740,18 +743,7 @@ program
       return;
     }
     
-    // Check agent limit (max 11) - count windows only
-    try {
-      const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_name}'], { encoding: 'utf-8' });
-      const windowCount = windowsOutput.trim().split('\n').filter(w => w !== 'agentmux').length;
-      
-      if (windowCount >= MAX_AGENTS - AGENTS.length) {
-        console.log(chalk.red(`\n❌ Agent limit reached (${MAX_AGENTS} max). Kill an agent first.\n`));
-        return;
-      }
-    } catch {}
-    
-    // Check if agent name already exists (exact match)
+    // Check if agent name already exists (exact match in windows)
     try {
       const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_name}'], { encoding: 'utf-8' });
       const windows = windowsOutput.trim().split('\n');
@@ -766,17 +758,49 @@ program
     console.log(chalk.blue(`\n🌊 Spawning ${agentName} (${harness})...\n`));
     
     try {
-      // Create new window with agent name
-      execFileSync('tmux', ['new-window', '-t', `${session}:`, '-n', agentName]);
-      
-      // Start the harness
-      const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
-      execFileSync('tmux', ['send-keys', '-t', `${session}:${agentName}`, cmd, 'C-m']);
-      
-      console.log(chalk.green(`✅ Agent "${agentName}" spawned successfully!`));
-      console.log(chalk.gray(`   Window: ${agentName}`));
-      console.log(chalk.gray(`   Harness: ${harness}`));
-      console.log(chalk.gray(`   Switch: Ctrl+B w (then select ${agentName})\n`));
+      if (options.tab) {
+        // Spawn in new window/tab
+        execFileSync('tmux', ['new-window', '-t', `${session}:`, '-n', agentName]);
+        
+        // Start the harness
+        const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
+        execFileSync('tmux', ['send-keys', '-t', `${session}:${agentName}`, cmd, 'C-m']);
+        
+        console.log(chalk.green(`✅ Agent "${agentName}" spawned successfully!`));
+        console.log(chalk.gray(`   Window: ${agentName}`));
+        console.log(chalk.gray(`   Harness: ${harness}`));
+        console.log(chalk.gray(`   Switch: Ctrl+B w (then select ${agentName})\n`));
+      } else {
+        // Spawn in new pane (default)
+        // Get list of panes and find the highest numbered one
+        const panesOutput = execFileSync('tmux', ['list-panes', '-t', `${session}:0`, '-F', '#{pane_index}'], { encoding: 'utf-8' });
+        const paneIndices = panesOutput.trim().split('\n').map(p => parseInt(p.trim(), 10)).filter(n => !isNaN(n));
+        const lastPaneIndex = Math.max(...paneIndices);
+        
+        // Split the last pane to create a new one
+        execFileSync('tmux', ['split-window', '-t', `${session}:0.${lastPaneIndex}`]);
+        
+        // Get the new pane index (it will be the new highest)
+        const newPanesOutput = execFileSync('tmux', ['list-panes', '-t', `${session}:0`, '-F', '#{pane_index}'], { encoding: 'utf-8' });
+        const newPaneIndices = newPanesOutput.trim().split('\n').map(p => parseInt(p.trim(), 10)).filter(n => !isNaN(n));
+        const newPaneIndex = Math.max(...newPaneIndices);
+        
+        // Set pane title
+        execFileSync('tmux', ['select-pane', '-t', `${session}:0.${newPaneIndex}`, '-T', `${agentName} (${harness})`]);
+        
+        // Start the harness in the new pane
+        const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
+        execFileSync('tmux', ['send-keys', '-t', `${session}:0.${newPaneIndex}`, 'clear', 'C-m']);
+        execFileSync('tmux', ['send-keys', '-t', `${session}:0.${newPaneIndex}`, cmd, 'C-m']);
+        
+        // Rebalance panes
+        execFileSync('tmux', ['select-layout', '-t', `${session}:0`, 'tiled']);
+        
+        console.log(chalk.green(`✅ Agent "${agentName}" spawned successfully!`));
+        console.log(chalk.gray(`   Pane: ${newPaneIndex}`));
+        console.log(chalk.gray(`   Harness: ${harness}`));
+        console.log(chalk.gray(`   Click or Ctrl+B + arrow to focus\n`));
+      }
     } catch (e) {
       console.log(chalk.red(`\n❌ Failed to spawn agent: ${e}\n`));
     }
