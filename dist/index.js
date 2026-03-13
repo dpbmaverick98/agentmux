@@ -3961,15 +3961,16 @@ program2.command("status").description("Show live status with auto-refresh (runs
 Active Agents:`));
     try {
       const session = getSessionName();
-      const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#P: #{pane_current_command}"], { encoding: "utf-8" });
+      const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#{pane_index}: #{pane_title}: #{pane_current_command}"], { encoding: "utf-8" });
       if (output) {
         const lines = output.trim().split(`
 `);
-        lines.forEach((line, idx) => {
-          const agent = AGENTS[idx];
-          const paneName = agent ? `${agent.name} (${agent.harness})` : `Pane ${idx}`;
-          const cmd = line.split(":")[1]?.trim() || "idle";
-          console.log(`  \u2022 ${paneName}: ${cmd}`);
+        lines.forEach((line) => {
+          const parts = line.split(": ");
+          const paneIndex = parts[0]?.trim() || "?";
+          const paneTitle = parts[1]?.trim() || `Pane ${paneIndex}`;
+          const cmd = parts[2]?.trim() || "idle";
+          console.log(`  \u2022 ${paneTitle}: ${cmd}`);
         });
       } else {
         console.log(source_default.gray("  No active session"));
@@ -4233,21 +4234,26 @@ program2.command("list").description("List all agents with their status and harn
   const session = getSessionName();
   const spawnedWindows = [];
   try {
-    const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#P: #{pane_current_command}"], { encoding: "utf-8" });
-    const paneCommands = {};
+    const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#{pane_index}: #{pane_title}: #{pane_current_command}"], { encoding: "utf-8" });
+    const paneInfo = [];
     if (output) {
       output.trim().split(`
 `).forEach((line) => {
-        const [paneNum, ...cmdParts] = line.split(":");
-        paneCommands[paneNum.trim()] = cmdParts.join(":").trim();
+        const parts = line.split(": ");
+        if (parts.length >= 3) {
+          paneInfo.push({
+            index: parts[0].trim(),
+            title: parts[1].trim(),
+            cmd: parts[2].trim()
+          });
+        }
       });
     }
-    console.log(source_default.yellow("Fixed Panes:"));
-    AGENTS.forEach((agent) => {
-      const cmd = paneCommands[agent.pane.toString()] || "not running";
-      const status = cmd !== "not running" ? source_default.green("\u25CF running") : source_default.gray("\u25CB offline");
-      console.log(`  Pane ${agent.pane}: ${source_default.bold(agent.name)} (${agent.harness}) - ${status}`);
-      console.log(`           ${source_default.gray(cmd)}`);
+    console.log(source_default.yellow("Active Panes:"));
+    paneInfo.forEach((pane) => {
+      const status = pane.cmd !== "not running" ? source_default.green("\u25CF running") : source_default.gray("\u25CB offline");
+      console.log(`  Pane ${pane.index}: ${source_default.bold(pane.title)} - ${status}`);
+      console.log(`           ${source_default.gray(pane.cmd)}`);
     });
     try {
       const windowsOutput = execFileSync("tmux", ["list-windows", "-t", session, "-F", "#I: #W"], { encoding: "utf-8" });

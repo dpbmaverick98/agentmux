@@ -312,14 +312,15 @@ program
       console.log(chalk.yellow('\nActive Agents:'));
       try {
         const session = getSessionName();
-        const output = execFileSync('tmux', ['list-panes', '-t', session, '-F', '#P: #{pane_current_command}'], { encoding: 'utf-8' });
+        const output = execFileSync('tmux', ['list-panes', '-t', session, '-F', '#{pane_index}: #{pane_title}: #{pane_current_command}'], { encoding: 'utf-8' });
         if (output) {
           const lines = output.trim().split('\n');
-          lines.forEach((line, idx) => {
-            const agent = AGENTS[idx];
-            const paneName = agent ? `${agent.name} (${agent.harness})` : `Pane ${idx}`;
-            const cmd = line.split(':')[1]?.trim() || 'idle';
-            console.log(`  • ${paneName}: ${cmd}`);
+          lines.forEach((line) => {
+            const parts = line.split(': ');
+            const paneIndex = parts[0]?.trim() || '?';
+            const paneTitle = parts[1]?.trim() || `Pane ${paneIndex}`;
+            const cmd = parts[2]?.trim() || 'idle';
+            console.log(`  • ${paneTitle}: ${cmd}`);
           });
         } else {
           console.log(chalk.gray('  No active session'));
@@ -640,24 +641,28 @@ program
     const spawnedWindows: Array<{id: string, name: string, harness: string}> = [];
     
     try {
-      // Get pane info from tmux
-      const output = execFileSync('tmux', ['list-panes', '-t', session, '-F', '#P: #{pane_current_command}'], { encoding: 'utf-8' });
-      const paneCommands: {[key: string]: string} = {};
+      // Get pane info from tmux with titles
+      const output = execFileSync('tmux', ['list-panes', '-t', session, '-F', '#{pane_index}: #{pane_title}: #{pane_current_command}'], { encoding: 'utf-8' });
+      const paneInfo: Array<{index: string, title: string, cmd: string}> = [];
       
       if (output) {
         output.trim().split('\n').forEach(line => {
-          const [paneNum, ...cmdParts] = line.split(':');
-          paneCommands[paneNum.trim()] = cmdParts.join(':').trim();
+          const parts = line.split(': ');
+          if (parts.length >= 3) {
+            paneInfo.push({
+              index: parts[0].trim(),
+              title: parts[1].trim(),
+              cmd: parts[2].trim()
+            });
+          }
         });
       }
       
-      console.log(chalk.yellow('Fixed Panes:'));
-      AGENTS.forEach(agent => {
-        const cmd = paneCommands[agent.pane.toString()] || 'not running';
-        const status = cmd !== 'not running' ? chalk.green('● running') : chalk.gray('○ offline');
-        
-        console.log(`  Pane ${agent.pane}: ${chalk.bold(agent.name)} (${agent.harness}) - ${status}`);
-        console.log(`           ${chalk.gray(cmd)}`);
+      console.log(chalk.yellow('Active Panes:'));
+      paneInfo.forEach(pane => {
+        const status = pane.cmd !== 'not running' ? chalk.green('● running') : chalk.gray('○ offline');
+        console.log(`  Pane ${pane.index}: ${chalk.bold(pane.title)} - ${status}`);
+        console.log(`           ${chalk.gray(pane.cmd)}`);
       });
       
       // Get spawned windows
