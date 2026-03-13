@@ -4,26 +4,32 @@ Customizable workflows for agent coordination and task management.
 
 ## Available Workflows
 
-### detailed-commits
-**Standard workflow for creating well-documented commits**
+### code-commit-review-loop
+**Coordinator-driven code development with review workflow**
 
-Ensures every code change is fully documented with context (what, why, assumptions), making reviews faster and knowledge sharing easier.
+Multi-agent development where coordinator routes all communication. Coder implements with atomic commits, reviewer provides critical feedback, process ends in PR ready for user approval.
 
 **Key Features:**
-- Feature branch creation guidelines
-- Detailed commit format: `what | why | assumptions`
-- Agent assignment and tracking
-- Review coordination
+- Coordinator routes all messages (no direct agent-to-agent)
+- Coder reports each commit with full context
+- Reviewer provides line-level critical feedback
+- Process ends in PR creation (user decides on merge)
+- Parallel development (coder continues while review happens)
 
 **Install:**
 ```bash
-agentmux workflow detailed-commits --install
+agentmux workflow code-commit-review-loop --install
 ```
 
 **Use:**
 ```bash
-agentmux workflow detailed-commits
+agentmux workflow code-commit-review-loop
 ```
+
+### Deprecated Workflows
+
+The following workflows are deprecated and should not be used:
+- `detailed-commits` - Relied on removed `agentmux commit` and `agentmux review` commands. Use `code-commit-review-loop` instead.
 
 ## Installing Workflows
 
@@ -34,10 +40,10 @@ From your project directory:
 agentmux workflow
 
 # Install a workflow from GitHub
-agentmux workflow detailed-commits --install
+agentmux workflow code-commit-review-loop --install
 
 # View a workflow
-agentmux workflow detailed-commits
+agentmux workflow code-commit-review-loop
 ```
 
 ## Creating Custom Workflows
