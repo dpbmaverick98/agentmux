@@ -3889,6 +3889,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   console.log(source_default.gray("Setting up status pane..."));
   execFileSync("tmux", ["select-pane", "-t", `${session}:0.0`]);
   execFileSync("tmux", ["select-pane", "-t", `${session}:0.0`, "-T", "status"]);
+  execFileSync("tmux", ["set-option", "-p", "-t", `${session}:0.0`, "@agent", "status"]);
   execFileSync("tmux", ["send-keys", "-t", `${session}:0.0`, `${process.argv[0]} ${process.argv[1]} status`, "C-m"]);
   AGENTS.filter((a) => a.name !== "status").forEach((agent) => {
     const optionKey = agent.name;
@@ -3896,6 +3897,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
       console.log(source_default.gray(`Starting ${agent.name}...`));
       execFileSync("tmux", ["select-pane", "-t", `${session}:0.${agent.pane}`]);
       execFileSync("tmux", ["select-pane", "-t", `${session}:0.${agent.pane}`, "-T", `${agent.name} (${agent.harness})`]);
+      execFileSync("tmux", ["set-option", "-p", "-t", `${session}:0.${agent.pane}`, "@agent", `${agent.name} (${agent.harness})`]);
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${agent.pane}`, "clear", "C-m"]);
       const agentCmd = `AGENTMUX_AGENT=${agent.name} AGENTMUX_PROJECT=${currentDir} ${agent.cmd}`;
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${agent.pane}`, agentCmd, "C-m"]);
@@ -3962,16 +3964,16 @@ program2.command("status").description("Show live status with auto-refresh (runs
 Active Agents:`));
     try {
       const session = getSessionName();
-      const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#{pane_index}: #{pane_title}: #{pane_current_command}"], { encoding: "utf-8" });
+      const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#{pane_index}: #{@agent}: #{pane_current_command}"], { encoding: "utf-8" });
       if (output) {
         const lines = output.trim().split(`
 `);
         lines.forEach((line) => {
           const parts = line.split(": ");
           const paneIndex = parts[0]?.trim() || "?";
-          const paneTitle = parts[1]?.trim() || `Pane ${paneIndex}`;
+          const agentName = parts[1]?.trim() || `Pane ${paneIndex}`;
           const cmd = parts[2]?.trim() || "idle";
-          console.log(`  \u2022 ${paneTitle}: ${cmd}`);
+          console.log(`  \u2022 ${agentName}: ${cmd}`);
         });
       } else {
         console.log(source_default.gray("  No active session"));
@@ -4235,7 +4237,7 @@ program2.command("list").description("List all agents with their status and harn
   const session = getSessionName();
   const spawnedWindows = [];
   try {
-    const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#{pane_index}: #{pane_title}: #{pane_current_command}"], { encoding: "utf-8" });
+    const output = execFileSync("tmux", ["list-panes", "-t", session, "-F", "#{pane_index}: #{@agent}: #{pane_current_command}"], { encoding: "utf-8" });
     const paneInfo = [];
     if (output) {
       output.trim().split(`
@@ -4244,7 +4246,7 @@ program2.command("list").description("List all agents with their status and harn
         if (parts.length >= 3) {
           paneInfo.push({
             index: parts[0].trim(),
-            title: parts[1].trim(),
+            agent: parts[1].trim(),
             cmd: parts[2].trim()
           });
         }
@@ -4253,7 +4255,7 @@ program2.command("list").description("List all agents with their status and harn
     console.log(source_default.yellow("Active Panes:"));
     paneInfo.forEach((pane) => {
       const status = pane.cmd !== "not running" ? source_default.green("\u25CF running") : source_default.gray("\u25CB offline");
-      console.log(`  Pane ${pane.index}: ${source_default.bold(pane.title)} - ${status}`);
+      console.log(`  Pane ${pane.index}: ${source_default.bold(pane.agent)} - ${status}`);
       console.log(`           ${source_default.gray(pane.cmd)}`);
     });
     try {
@@ -4362,6 +4364,7 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
 `).map((p) => parseInt(p.trim(), 10)).filter((n) => !isNaN(n));
       const newPaneIndex = Math.max(...newPaneIndices);
       execFileSync("tmux", ["select-pane", "-t", `${session}:0.${newPaneIndex}`, "-T", `${agentName} (${harness})`]);
+      execFileSync("tmux", ["set-option", "-p", "-t", `${session}:0.${newPaneIndex}`, "@agent", `${agentName} (${harness})`]);
       const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${newPaneIndex}`, "clear", "C-m"]);
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${newPaneIndex}`, cmd, "C-m"]);
