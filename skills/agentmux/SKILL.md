@@ -82,35 +82,6 @@ agentmux status
 | Ctrl+B d | Detach session |
 | Click | Switch panes |
 
-## Commit Tracking
-
-Track your work with commits (3-5 word descriptions):
-
-### Log a commit
-```bash
-agentmux commit <github-hash> "@agent: description"
-# Example: agentmux commit abc123 "@nui: implemented auth"
-# Shows as: ○ abc123 @nui: implemented auth
-```
-
-### Review a commit
-```bash
-agentmux review <hash>
-# Example: agentmux review abc123
-# Changes: ○ → ● and adds reviewer name
-```
-
-### View all commits
-```bash
-agentmux commits
-# or: agentmux log
-```
-
-### Clear commit history
-```bash
-agentmux clear-commits
-```
-
 ## Workflows
 
 Install and use agent coordination workflows:
@@ -137,11 +108,10 @@ agentmux workflow detailed-commits
 
 1. `agentmux list` - Check who's online
 2. Work on task
-3. `agentmux commit abc123 "@nui: fixed bug"` - Log your work
-4. `agentmux send <agent> "message"` - Communicate
-5. `agentmux review def456` - Review others' work
-6. `agentmux commits` - Check recent work
-7. `agentmux spawn opencode helper` - Add helpers if needed
+3. `agentmux send <agent> "message"` - Communicate
+4. `agentmux spawn opencode helper` - Add helpers if needed
+
+**Note:** Use standard git commands for commits. The `agentmux status` command will show recent git commits.
 
 ## Memory System
 
