@@ -767,7 +767,7 @@ program
     
     try {
       // Create new window with agent name
-      execFileSync('tmux', ['new-window', '-t', session, '-n', agentName]);
+      execFileSync('tmux', ['new-window', '-t', `${session}:`, '-n', agentName]);
       
       // Start the harness
       const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;

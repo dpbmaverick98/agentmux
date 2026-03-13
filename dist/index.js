@@ -4346,7 +4346,7 @@ program2.command("spawn <harness> <agent-name>").description(`Spawn a new agent 
 \uD83C\uDF0A Spawning ${agentName} (${harness})...
 `));
   try {
-    execFileSync("tmux", ["new-window", "-t", session, "-n", agentName]);
+    execFileSync("tmux", ["new-window", "-t", `${session}:`, "-n", agentName]);
     const cmd = `AGENTMUX_AGENT=${agentName} AGENTMUX_PROJECT=${currentDir} ${harness}`;
     execFileSync("tmux", ["send-keys", "-t", `${session}:${agentName}`, cmd, "C-m"]);
     console.log(source_default.green(`\u2705 Agent "${agentName}" spawned successfully!`));
