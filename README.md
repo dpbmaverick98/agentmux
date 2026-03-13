@@ -1,6 +1,6 @@
 # AgentMux 
 
-Ultra-lean multi-agent terminal multiplexer using tmux with lightweight commit tracking.
+Ultra-lean multi-agent terminal multiplexer using tmux with git-based commit tracking.
 
 ## One-Line Install
 
@@ -31,7 +31,7 @@ agentmux start
 ```
 ┌─────────────────────┬─────────────────────┐
 │    📊 STATUS        │  🤖 nui (opencode)  │
-│   (commit log)      │    Agent #1         │
+│   (git log)         │    Agent #1         │
 ├─────────────────────┼─────────────────────┤
 │  🤖 sam (opencode)  │  🤖 wit (claude)    │
 │    Agent #2         │    Agent #3         │
@@ -39,9 +39,9 @@ agentmux start
 ```
 
 - **4-pane split screen** using tmux
-- **Live status** shows commits and messages every 3 seconds
+- **Live status** shows git log and messages every 3 seconds
 - **Cross-agent messaging** via `agentmux send`
-- **Commit tracking** in `.agentmux/shared/commits.txt`
+- **Git-based commits** - Use standard git commands
 - **Workflows** for agent coordination patterns
 
 ## Commands
@@ -54,7 +54,7 @@ agentmux start
 | `agentmux start` | Launch 4-pane tmux session with all agents |
 | `agentmux stop` | Kill the tmux session |
 | `agentmux list` | Show all agents with status and harness |
-| `agentmux status` | Show live-updating status (commits, agents, messages) |
+| `agentmux status` | Show live-updating status (git log, agents, messages) |
 
 ### Messaging Commands
 
@@ -64,27 +64,7 @@ agentmux start
 | `agentmux send sam "message"` | Send message to sam |
 | `agentmux send wit "message"` | Send message to wit |
 
-### Commit Tracking Commands
-
-| Command | Description |
-|---------|-------------|
-| `agentmux commit <hash> "@agent: message"` | Log a commit (○ = pending) |
-| `agentmux review <hash>` | Mark commit as reviewed (● = done) |
-| `agentmux commits` or `agentmux log` | Show recent commits |
-| `agentmux clear-commits` | Clear commit history |
-
-**Commit Examples:**
-```bash
-# Log your work
-agentmux commit abc123 "@nui: implemented auth API"
-# Shows in status: ○ abc123 @nui: implemented auth API
-
-# Review others' work
-agentmux review abc123
-# Changes to: ● abc123 @nui: implemented auth API (sam)
-```
-
-### Workflow Commands
+### Messaging Commands
 
 | Command | Description |
 |---------|-------------|
@@ -96,12 +76,6 @@ agentmux review abc123
 ```bash
 # List workflows
 agentmux workflow
-
-# Install detailed-commits workflow
-agentmux workflow detailed-commits --install
-
-# View workflow
-agentmux workflow detailed-commits
 ```
 
 ### Agent Management Commands
@@ -209,7 +183,7 @@ agentmux send sam "Can you review my changes?"
 Each agent:
 - Has their own environment variables (`AGENTMUX_AGENT=nui`)
 - Can message other agents via `agentmux send`
-- Can log commits with `agentmux commit`
+- Uses standard git commands for commits
 - Can view workflows with `agentmux workflow`
 - Can see the live status in the top-left pane
 
@@ -223,9 +197,6 @@ agentmux send sam "I need help with the database schema"
 
 # Share progress
 agentmux send wit "Auth module is complete, ready for review"
-
-# Log your work
-agentmux commit abc123 "@nui: implemented auth API"
 
 # Broadcast to team
 agentmux send nui "Team sync in 5 minutes"
@@ -245,11 +216,9 @@ project/
 ├── .agentmux/
 │   ├── shared/                     # Shared context
 │   │   ├── plan.md                 # Project plan
-│   │   ├── messages.txt            # Message log
-│   │   └── commits.txt             # Commit tracking
+│   │   └── messages.txt            # Message log
 │   └── workflows/                  # Installed workflows
-│       └── detailed-commits/
-│           └── SKILL.md
+│       └── [workflows]
 └── [your project files]
 ```
 
@@ -264,7 +233,6 @@ Provides:
 - Available commands (`agentmux list`, `agentmux send`, `agentmux spawn`, etc.)
 - How to message other agents
 - Spawning and killing agents
-- Commit tracking workflow
 - Workflow management
 - Environment variables
 - Keyboard shortcuts
@@ -294,7 +262,7 @@ All installed automatically by the one-liner installer.
 ## Philosophy
 
 - **tmux IS the infrastructure** - No custom TUI needed
-- **Simple commit tracking** - Lightweight logging, not full version control
+- **Git-based commits** - Use standard git commands
 - **Visible communication** - tmux send-keys shows messages in real-time
 - **Workflows over automation** - Agents follow documented patterns
 - **Simple** - ~400 lines of TypeScript, minimal magic
@@ -308,7 +276,7 @@ The installer detects non-interactive mode and skips auto-attach. Run `agentmux 
 Make sure the tmux session is running: `tmux attach -t agentmux`
 
 ### Commits not showing in status
-The status pane refreshes every 3 seconds. Make sure you're logging commits with `agentmux commit`.
+The status pane shows git log output. Make sure commits are pushed to the repository.
 
 ### Agent not responding
 Check if the agent is running: `agentmux list`

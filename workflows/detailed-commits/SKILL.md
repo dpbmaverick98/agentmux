@@ -2,9 +2,13 @@
 name: detailed-commits
 description: Standard workflow for creating well-documented commits with full context (what, why, assumptions) to enable easy code review. Main agent assigns work, tracks progress, and coordinates reviews.
 author: dpbmaverick98
+status: deprecated
+deprecation_note: This workflow relied on the now-removed `agentmux commit` and `agentmux review` commands. Use standard git commands instead.
 ---
 
-# Detailed Commits Workflow
+# Detailed Commits Workflow (DEPRECATED)
+
+> **⚠️ DEPRECATED**: This workflow relied on `agentmux commit` and `agentmux review` commands which have been removed. Use standard git commands for commits.
 
 ## Overview
 
