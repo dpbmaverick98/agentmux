@@ -83,9 +83,16 @@ agentmux list        # Who is online
 agentmux status      # Recent activity
 ```
 
-### Lifecycle management (max 11 agents)
+### Lifecycle management
 ```bash
-agentmux spawn <harness> <name>    # Examples: opencode helper, claude reviewer
+# Spawn in new pane (default) - splits last pane, auto-rebalances layout
+agentmux spawn <harness> <name>
+agentmux spawn opencode helper
+agentmux spawn claude reviewer
+
+# Spawn in new window/tab instead
+agentmux spawn <harness> <name> --tab
+
 agentmux kill <agent>              # Remove specific agent
 agentmux stop                      # Kill all (confirm first)
 ```
@@ -109,7 +116,6 @@ agentmux stop                      # Kill all (confirm first)
 
 - **Do not send messages to status agent** (read-only monitor)
 - **Do not narrate messages in prose** without executing `agentmux send`
-- **Do not spawn agents without checking count first** (`agentmux list`)
 - **Do not use `agentmux stop` unless user explicitly confirms**
 - **Do not send empty or context-free messages** like "help" or "check this"
 - **Do not use removed commands**: commit, review, commits, clear-commits
