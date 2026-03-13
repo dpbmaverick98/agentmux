@@ -16,12 +16,12 @@ agentmux whoami
 
 You will see output like: `nui (opencode) @ /path/to/project`
 
-This tells you your agent name (nui, sam, or wit) which you MUST use when signing messages.
+This tells you your agent name (nui, sam, or wit).
 
 ## The Team
 
 - **nui** (opencode) - Top-right pane
-- **sam** (opencode) - Bottom-left pane  
+- **sam** (opencode) - Bottom-left pane
 - **wit** (claude) - Bottom-right pane
 - **status** (monitor) - Top-left pane (read-only)
 
@@ -33,31 +33,26 @@ agentmux list
 ```
 
 ### Step 2: Send a message
-**ALWAYS use this exact format:**
 ```bash
-agentmux send <agent> "@<your-name>: your message here"
+agentmux send <agent> "your message here"
 ```
 
 **Examples:**
-- If you are nui: `agentmux send sam "@nui: Can you review my code?"`
-- If you are sam: `agentmux send wit "@sam: I'm ready for testing"`
-- If you are wit: `agentmux send nui "@wit: Found a bug in line 42"`
+- `agentmux send sam "Can you review my code?"`
+- `agentmux send wit "I'm ready for testing"`
+- `agentmux send nui "Found a bug in line 42"`
 
-**IMPORTANT RULES:**
-1. Always include `@<your-name>:` at the start of your message
-2. Always use quotes around your message
-3. Check responses before sending follow-up messages
-4. Wait for the "✅ Message sent" confirmation
+The recipient automatically sees who sent it: `📨 [@nui → @sam]: Can you review my code?`
 
 ## Core Commands
 
 ### Send message to another agent
 ```bash
 agentmux send <agent> "message"
-# Example: agentmux send sam "@nui: Can you review my code?"
+# Example: agentmux send sam "Can you review my code?"
 ```
 **You will see:** `✅ Message sent to sam`
-**Recipient sees:** `📨 [@nui → @sam]: @nui: Can you review my code?`
+**Recipient sees:** `📨 [@nui → @sam]: Can you review my code?`
 
 ### List all agents and their status
 ```bash
@@ -98,7 +93,7 @@ agentmux status
 
 1. **Start of session:** Run `agentmux whoami` to confirm your identity
 2. **Check team:** Run `agentmux list` to see who is online
-3. **Coordinate work:** Use `agentmux send <agent> "@<you>: message"` to communicate
+3. **Coordinate work:** Use `agentmux send <agent> "message"` to communicate
 4. **Track progress:** Use `agentmux status` to see recent commits and messages
 5. **Use git normally:** Make commits with standard git commands
 
