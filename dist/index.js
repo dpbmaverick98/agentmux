@@ -3877,6 +3877,7 @@ program2.command("start").description("Start full AgentMux environment with 4 pa
   console.log(source_default.gray("Creating 4-pane split screen..."));
   execFileSync("tmux", ["new-session", "-d", "-s", session, "-n", "agentmux"]);
   execFileSync("tmux", ["set", "-t", session, "mouse", "on"]);
+  execFileSync("tmux", ["set", "-t", session, "allow-rename", "off"]);
   console.log(source_default.gray("Creating nui pane..."));
   execFileSync("tmux", ["split-window", "-h", "-t", session]);
   console.log(source_default.gray("Creating sam pane..."));

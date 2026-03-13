@@ -201,6 +201,7 @@ program
     // Create session with first pane (status - top left) and enable mouse
     execFileSync('tmux', ['new-session', '-d', '-s', session, '-n', 'agentmux']);
     execFileSync('tmux', ['set', '-t', session, 'mouse', 'on']);
+    execFileSync('tmux', ['set', '-t', session, 'allow-rename', 'off']);
 
     // Split horizontally - creates right pane (nui - top right)
     console.log(chalk.gray('Creating nui pane...'));
