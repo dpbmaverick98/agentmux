@@ -4,6 +4,9 @@ import chalk from 'chalk';
 import { spawn, execFileSync, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import type { ExpertiseRecord, RecordType, Classification } from './memory/schema/types.ts';
+import { getAgentMuxDir as getSharedAgentMuxDir } from './lib/paths.ts';
+import { formatRecord as sharedFormatRecord } from './lib/format.ts';
 
 const program = new Command();
 
@@ -32,10 +35,8 @@ const AGENT_PANE_MAP: { [key: string]: number } = Object.fromEntries(
   AGENTS.filter(a => a.name !== 'status').map(a => [a.name, a.pane])
 );
 
-// Get local .agentmux directory for current project
-function getAgentMuxDir(): string {
-  return path.join(process.cwd(), '.agentmux');
-}
+// Get local .agentmux directory for current project (uses shared tree-walking lookup)
+const getAgentMuxDir = getSharedAgentMuxDir;
 
 // Execute command and return output (legacy wrapper for simple commands)
 function exec(cmd: string, options: any = {}): string {
@@ -430,8 +431,9 @@ program
 
 program
   .command('send <to> <message...>')
+  .option('--inject', 'Inject relevant memory context into message (opt-in)')
   .description('Send a message to another agent (uses tmux send-keys)')
-  .action((to: string, message: string[]) => {
+  .action(async (to: string, message: string[], options: { inject: boolean | undefined }) => {
     if (!checkTmux()) return;
 
     const session = getSessionName();
@@ -439,21 +441,48 @@ program
     const from = process.env.AGENTMUX_AGENT || 'user';
     const agentMuxDir = getAgentMuxDir();
 
-    // Create the display message
-    const displayMsg = `📨 [@${from} → @${to}]: ${msg}`;
+    let contextInjection = "";
+    
+    if (options.inject === true) {
+      try {
+        const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
+        const { readExpertiseFile } = await import('./memory/storage/store.ts');
+        const { matchMemories, formatMemoryForInjection } = await import('./context/matcher.ts');
+
+        const config = await readConfig();
+        const allRecords: any[] = [];
+
+        for (const domain of config.domains) {
+          const filePath = getExpertisePath(domain);
+          const records = await readExpertiseFile(filePath);
+          allRecords.push(...records);
+        }
+
+        const matched = matchMemories(allRecords, msg, 2);
+        
+        if (matched.length > 0) {
+          contextInjection = "\n\n" + matched.map(formatMemoryForInjection).join("\n");
+        }
+      } catch (e) {
+        console.error(chalk.yellow(`Warning: context injection failed: ${e instanceof Error ? e.message : e}`));
+      }
+    }
+
+    const displayMsg = `📨 [@${from} → @${to}]: ${msg}${contextInjection}`;
     const timestamp = new Date().toISOString();
 
     try {
       const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
 
       if (paneNum !== undefined) {
-        // Send message as literal text into the agent's chat input
-        // Use execFileSync with array args to prevent shell injection and ensure ordering
         execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, '-l', displayMsg]);
         execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, 'Enter']);
         console.log(chalk.green(`✅ Message sent to ${to}`));
         
-        // Log message to messages.txt with timestamp
+        if (contextInjection) {
+          console.log(chalk.gray(`  + context hints injected`));
+        }
+        
         const messagesPath = path.join(agentMuxDir, 'shared', 'messages.txt');
         const logEntry = `[${timestamp}] ${displayMsg}\n`;
         fs.appendFileSync(messagesPath, logEntry);
@@ -980,5 +1009,476 @@ program
       console.log(chalk.red(`\n❌ Failed to kill agent: ${e}\n`));
     }
   });
+
+// Memory subcommand
+const memoryProgram = new Command();
+memoryProgram
+  .name('memory')
+  .description('Structured expertise management for agents')
+  .version('1.0.0');
+
+memoryProgram
+  .command('init')
+  .description('Initialize agentmux memory storage')
+  .action(async () => {
+    const { existsSync } = await import('node:fs');
+    const { ensureExpertiseDir, readConfig, writeConfig, getExpertisePath } = await import('./memory/storage/config.ts');
+    const { createExpertiseFile } = await import('./memory/storage/store.ts');
+
+    await ensureExpertiseDir();
+    const config = await readConfig();
+
+    for (const domain of config.domains) {
+      const filePath = getExpertisePath(domain);
+      if (!existsSync(filePath)) {
+        await createExpertiseFile(filePath);
+      }
+    }
+
+    console.log(chalk.green('✓ Initialized agentmux memory storage'));
+    console.log(chalk.dim(`  Domains: ${config.domains.join(', ')}`));
+    console.log(chalk.dim(`  Storage: .agentmux/expertise/`));
+  });
+
+memoryProgram
+  .command('add')
+  .argument('<domain>', 'domain to add')
+  .description('Add a new expertise domain')
+  .action(async (domain: string) => {
+    const { ensureExpertiseDir, readConfig, writeConfig, getExpertisePath } = await import('./memory/storage/config.ts');
+    const { createExpertiseFile } = await import('./memory/storage/store.ts');
+    
+    await ensureExpertiseDir();
+    const config = await readConfig();
+    
+    if (config.domains.includes(domain)) {
+      console.log(chalk.yellow(`Domain "${domain}" already exists.`));
+      return;
+    }
+
+    config.domains.push(domain);
+    await writeConfig(config);
+
+    const filePath = getExpertisePath(domain);
+    await createExpertiseFile(filePath);
+
+    console.log(chalk.green(`✓ Added domain "${domain}"`));
+  });
+
+memoryProgram
+  .command('record')
+  .argument('<domain>', 'expertise domain')
+  .argument('[content]', 'record content')
+  .option('--type <type>', 'record type (convention, failure, decision)', 'convention')
+  .option('--classification <classification>', 'classification level', 'tactical')
+  .option('--description <description>', 'description of the record')
+  .option('--resolution <resolution>', 'resolution for failure records')
+  .option('--title <title>', 'title for decision records')
+  .option('--rationale <rationale>', 'rationale for decision records')
+  .option('--tags <tags>', 'comma-separated tags')
+  .option('--force', 'force recording even if duplicate exists')
+  .option('--dry-run', 'preview what would be recorded without writing')
+  .description('Record an expertise record')
+  .action(async (domain: string, content: string | undefined, options: any) => {
+    const { ensureExpertiseDir, getExpertisePath, readConfig, addDomain } = await import('./memory/storage/config.ts');
+    const { appendRecord, findDuplicate, readExpertiseFile } = await import('./memory/storage/store.ts');
+    
+    await ensureExpertiseDir();
+    const config = await readConfig();
+
+    if (!config.domains.includes(domain)) {
+      await addDomain(domain);
+      console.log(chalk.green(`✓ Auto-created domain "${domain}"`));
+    }
+
+    const recordedBy = process.env.AGENTMUX_AGENT || 'unknown';
+    const recordedAt = new Date().toISOString();
+
+    const tags = typeof options.tags === 'string'
+      ? options.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+      : undefined;
+
+    let record: ExpertiseRecord;
+
+    const recordType = options.type as RecordType;
+    const classification = (options.classification || 'tactical') as Classification;
+
+    switch (recordType) {
+      case 'convention': {
+        const conventionContent = content || options.description;
+        if (!conventionContent) {
+          console.error(chalk.red('Error: convention records require content or --description'));
+          process.exitCode = 1;
+          return;
+        }
+        record = {
+          type: 'convention',
+          content: conventionContent,
+          classification,
+          recorded_at: recordedAt,
+          recorded_by: recordedBy,
+          ...(tags && tags.length > 0 && { tags }),
+        };
+        break;
+      }
+      case 'failure': {
+        const failureDesc = options.description;
+        const failureResolution = options.resolution;
+        if (!failureDesc || !failureResolution) {
+          console.error(chalk.red('Error: failure records require --description and --resolution'));
+          process.exitCode = 1;
+          return;
+        }
+        record = {
+          type: 'failure',
+          description: failureDesc,
+          resolution: failureResolution,
+          classification,
+          recorded_at: recordedAt,
+          recorded_by: recordedBy,
+          ...(tags && tags.length > 0 && { tags }),
+        };
+        break;
+      }
+      case 'decision': {
+        const decisionTitle = options.title;
+        const decisionRationale = options.rationale;
+        if (!decisionTitle || !decisionRationale) {
+          console.error(chalk.red('Error: decision records require --title and --rationale'));
+          process.exitCode = 1;
+          return;
+        }
+        record = {
+          type: 'decision',
+          title: decisionTitle,
+          rationale: decisionRationale,
+          classification,
+          recorded_at: recordedAt,
+          recorded_by: recordedBy,
+          ...(tags && tags.length > 0 && { tags }),
+        };
+        break;
+      }
+      default:
+        console.error(chalk.red(`Error: Unknown record type "${recordType}". Valid types: convention, failure, decision`));
+        process.exitCode = 1;
+        return;
+    }
+
+    const filePath = getExpertisePath(domain);
+    const dryRun = options.dryRun === true;
+
+    if (dryRun) {
+      const existing = await readExpertiseFile(filePath);
+      const dup = findDuplicate(existing, record);
+
+      if (dup && !options.force) {
+        console.log(chalk.yellow(`Dry-run: Duplicate ${recordType} already exists in ${domain}. Would skip.`));
+      } else {
+        console.log(chalk.green(`✓ Dry-run: Would create ${recordType} in ${domain}`));
+      }
+      console.log(chalk.dim('  Run without --dry-run to apply changes.'));
+    } else {
+      const existing = await readExpertiseFile(filePath);
+      const dup = findDuplicate(existing, record);
+
+      if (dup && !options.force) {
+        console.log(chalk.yellow(`Duplicate ${recordType} already exists in ${domain}. Use --force to add anyway.`));
+      } else {
+        await appendRecord(filePath, record);
+        console.log(chalk.green(`✓ Recorded ${recordType} in ${domain}`));
+      }
+    }
+  });
+
+memoryProgram
+  .command('query')
+  .argument('[domain]', 'expertise domain to query (or --all for all)')
+  .option('--type <type>', 'filter by record type')
+  .option('--classification <classification>', 'filter by classification')
+  .option('--all', 'show all domains')
+  .option('--plan <plan>', 'filter by plan reference (e.g., @sam/api-design)')
+  .description('Query expertise records (use --all to see all domains)')
+  .action(async (domain: string | undefined, options: any) => {
+    const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
+    const { readExpertiseFile, getFileModTime, filterByType, filterByClassification } = await import('./memory/storage/store.ts');
+
+    const config = await readConfig();
+    const domainsToQuery: string[] = [];
+
+    if (options.all) {
+      domainsToQuery.push(...config.domains);
+      if (domainsToQuery.length === 0) {
+        console.log('No domains configured. Run `am memory init` first.');
+        return;
+      }
+    } else if (domain) {
+      if (!config.domains.includes(domain)) {
+        console.error(chalk.red(`Error: Domain "${domain}" not found.`));
+        console.error(`Hint: Run \`am memory add ${domain}\` to create.`);
+        process.exitCode = 1;
+        return;
+      }
+      domainsToQuery.push(domain);
+    } else {
+      console.error(chalk.red('Error: Please specify a domain or use --all'));
+      process.exitCode = 1;
+      return;
+    }
+
+    function filterByPlan(records: ExpertiseRecord[], planRef: string): ExpertiseRecord[] {
+      return records.filter(r => r.plan_refs && r.plan_refs.some(ref => ref.includes(planRef)));
+    }
+
+    for (const d of domainsToQuery) {
+      const filePath = getExpertisePath(d);
+      let records = await readExpertiseFile(filePath);
+      const lastUpdated = await getFileModTime(filePath);
+
+      if (options.type) {
+        records = filterByType(records, options.type);
+      }
+      if (options.classification) {
+        records = filterByClassification(records, options.classification);
+      }
+      if (options.plan) {
+        records = filterByPlan(records, options.plan);
+      }
+
+      if (records.length > 0) {
+        console.log(`\n## ${d}`);
+        if (lastUpdated) {
+          const ago = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60));
+          console.log(`(${records.length} entries, updated ${ago}h ago)`);
+        }
+        
+        const byType = { convention: [] as ExpertiseRecord[], failure: [] as ExpertiseRecord[], decision: [] as ExpertiseRecord[] };
+        for (const r of records) {
+          byType[r.type].push(r);
+        }
+
+        if (byType.convention.length > 0) {
+          console.log('\n### Conventions');
+          for (const r of byType.convention) console.log(sharedFormatRecord(r));
+        }
+        if (byType.failure.length > 0) {
+          console.log('\n### Known Failures');
+          for (const r of byType.failure) console.log(sharedFormatRecord(r));
+        }
+        if (byType.decision.length > 0) {
+          console.log('\n### Decisions');
+          for (const r of byType.decision) console.log(sharedFormatRecord(r));
+        }
+      }
+    }
+  });
+
+memoryProgram
+  .command('prime')
+  .argument('[domains...]', 'domain(s) to include')
+  .option('--compact', 'condensed output (default)')
+  .option('--full', 'include full details')
+  .option('--exclude <domains...>', 'domains to exclude')
+  .description('Generate agent-optimized context for injection')
+  .action(async (domainsArg: string[] | undefined, options: any) => {
+    const { readConfig, getExpertisePath } = await import('./memory/storage/config.ts');
+    const { readExpertiseFile } = await import('./memory/storage/store.ts');
+
+    const config = await readConfig();
+    const excluded = options.exclude || [];
+    
+    let targetDomains = domainsArg && domainsArg.length > 0 
+      ? domainsArg.filter((d: string) => !excluded.includes(d))
+      : config.domains.filter((d: string) => !excluded.includes(d));
+
+    if (targetDomains.length === 0) {
+      console.log('No domains to prime.');
+      return;
+    }
+
+    const sections: string[] = [];
+
+    for (const domain of targetDomains) {
+      const filePath = getExpertisePath(domain);
+      const records = await readExpertiseFile(filePath);
+
+      if (records.length === 0) continue;
+
+      const lines: string[] = [];
+      lines.push(`## ${domain}`);
+
+      const byType: Record<string, ExpertiseRecord[]> = {
+        convention: [],
+        failure: [],
+        decision: [],
+      };
+      for (const r of records) {
+        byType[r.type].push(r);
+      }
+
+      const style = options.full ? 'full' as const : 'compact' as const;
+      const formatter = (r: ExpertiseRecord) => sharedFormatRecord(r, style);
+
+      if (byType.convention.length > 0) {
+        lines.push('\n### Conventions');
+        for (const r of byType.convention) lines.push(formatter(r));
+      }
+      if (byType.failure.length > 0) {
+        lines.push('\n### Known Failures');
+        for (const r of byType.failure) lines.push(formatter(r));
+      }
+      if (byType.decision.length > 0) {
+        lines.push('\n### Decisions');
+        for (const r of byType.decision) lines.push(formatter(r));
+      }
+
+      sections.push(lines.join('\n'));
+    }
+
+    if (sections.length > 0) {
+      console.log('# AgentMux Memory Context\n');
+      console.log(sections.join('\n\n'));
+      console.log('\n---\n*Run `am memory query --all` to see full records. Record learnings with `am memory record`*');
+    } else {
+      console.log('No records found in specified domains.');
+    }
+  });
+
+memoryProgram
+  .command('status')
+  .description('Show memory status - record counts and last updated')
+  .action(async () => {
+    const { readConfig, getExpertisePath, getExpertiseDir } = await import('./memory/storage/config.ts');
+    const { readExpertiseFile, getFileModTime } = await import('./memory/storage/store.ts');
+
+    const config = await readConfig();
+    const expertiseDir = getExpertiseDir();
+
+    if (!fs.existsSync(expertiseDir)) {
+      console.log(chalk.yellow('No .agentmux/expertise/ found. Run `am memory init` first.'));
+      return;
+    }
+
+    console.log(chalk.bold('\n# AgentMux Memory Status\n'));
+
+    let totalRecords = 0;
+
+    for (const domain of config.domains) {
+      const filePath = getExpertisePath(domain);
+      const records = await readExpertiseFile(filePath);
+      const lastUpdated = await getFileModTime(filePath);
+
+      totalRecords += records.length;
+
+      const countStr = chalk.white(`${records.length} records`);
+      let timeStr = chalk.gray('(no data)');
+      
+      if (lastUpdated) {
+        const ago = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60));
+        if (ago < 1) {
+          const mins = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60));
+          timeStr = chalk.gray(`(${mins}m ago)`);
+        } else if (ago < 24) {
+          timeStr = chalk.gray(`(${ago}h ago)`);
+        } else {
+          const days = Math.floor(ago / 24);
+          timeStr = chalk.gray(`(${days}d ago)`);
+        }
+      }
+
+      console.log(`  ${chalk.cyan(domain.padEnd(15))} ${countStr} ${timeStr}`);
+    }
+
+    console.log(chalk.dim(`\n  Total: ${totalRecords} records across ${config.domains.length} domains`));
+    console.log(chalk.dim(`  Storage: ${expertiseDir}\n`));
+  });
+
+program.addCommand(memoryProgram);
+
+// Plan subcommand
+const planProgram = new Command();
+planProgram
+  .name('plan')
+  .description('Versioned plan management for multi-agent collaboration')
+  .version('1.0.0');
+
+planProgram
+  .command('init')
+  .argument('<name>', 'plan name')
+  .description('Create a new plan')
+  .action(async (name: string) => {
+    const { initPlan } = await import('./plan/commands/init.ts');
+    await initPlan(name);
+  });
+
+planProgram
+  .command('list')
+  .description('List all plans')
+  .action(async () => {
+    const { listPlanCommand } = await import('./plan/commands/init.ts');
+    await listPlanCommand();
+  });
+
+planProgram
+  .command('commit')
+  .argument('<name>', 'plan name')
+  .option('-m, --message <message>', 'commit message')
+  .description('Commit current plan.md as new version')
+  .action(async (name: string, options: any) => {
+    const { commitPlan } = await import('./plan/commands/commit.ts');
+    const message = options.message || `Update ${name}`;
+    await commitPlan(name, message);
+  });
+
+planProgram
+  .command('log')
+  .argument('<name>', 'plan name')
+  .description('Show version history')
+  .action(async (name: string) => {
+    const { logPlan } = await import('./plan/commands/commit.ts');
+    await logPlan(name);
+  });
+
+planProgram
+  .command('show')
+  .argument('<name>', 'plan name')
+  .option('--with-memory', 'show linked memory records')
+  .description('Show current plan version')
+  .action(async (name: string, options: any) => {
+    if (options.withMemory) {
+      const { showPlanWithMemory } = await import('./plan/commands/link.ts');
+      await showPlanWithMemory(name);
+    } else {
+      const { showPlan } = await import('./plan/commands/commit.ts');
+      await showPlan(name);
+    }
+  });
+
+planProgram
+  .command('link')
+  .argument('<plan>', 'plan name')
+  .option('--memory <ref>', 'memory reference ID (e.g., am-8f2d)')
+  .option('--version <version>', 'specific version (default: current)')
+  .description('Link memory record to plan version')
+  .action(async (plan: string, options: any) => {
+    if (!options.memory) {
+      console.log(chalk.red("Error: --memory <ref> is required"));
+      console.log(chalk.gray("Example: am plan link api-design --memory am-8f2d"));
+      return;
+    }
+    const { linkMemory } = await import('./plan/commands/link.ts');
+    await linkMemory(plan, options.memory, options.version);
+  });
+
+planProgram
+  .command('timeline')
+  .argument('[name]', 'plan name (optional, shows all plans if omitted)')
+  .description('Show ASCII timeline of plan evolution')
+  .action(async (name: string | undefined) => {
+    const { timelinePlan } = await import('./plan/commands/timeline.ts');
+    timelinePlan(name);
+  });
+
+program.addCommand(planProgram);
 
 program.parse();

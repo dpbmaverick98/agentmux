@@ -142,3 +142,48 @@ agentmux workflow detailed-commits
 5. `agentmux review def456` - Review others' work
 6. `agentmux commits` - Check recent work
 7. `agentmux spawn opencode helper` - Add helpers if needed
+
+## Memory System
+
+Record and query expertise across sessions:
+
+```bash
+# Record learnings
+am memory record decisions --type decision --title "Use REST" --rationale "Team familiarity"
+
+# Query memory
+am memory query --all
+am memory query --all --plan api-design
+
+# Load at session start
+am memory prime
+```
+
+## Plan Versioning
+
+Create versioned plans with memory linking:
+
+```bash
+am plan init api-design
+am plan commit api-design -m "v1: REST approach"
+am plan link api-design --memory am-8f2d
+am plan show api-design --with-memory
+am plan timeline api-design
+```
+
+## Context Injection (Phase 3)
+
+Auto-inject relevant memory into messages (opt-in):
+
+```bash
+agentmux send sam "What about auth?" --inject
+```
+
+## Timeline (Phase 4)
+
+Visualize plan evolution:
+
+```bash
+am plan timeline          # All plans
+am plan timeline api-design  # Specific plan
+```

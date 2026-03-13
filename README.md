@@ -113,6 +113,69 @@ agentmux workflow detailed-commits
 | `agentmux kill <agent-name>` | Kill a specific agent |
 | `agentmux stop` | Kill entire tmux session |
 
+### Memory Commands
+
+| Command | Description |
+|---------|-------------|
+| `am memory init` | Initialize memory storage with default domains |
+| `am memory add <domain>` | Add new expertise domain |
+| `am memory record <domain>` | Record convention, failure, or decision |
+| `am memory query [domain]` | Query records with filters |
+| `am memory prime` | Load context for session start |
+
+**Examples:**
+```bash
+# Record a decision
+am memory record decisions --type decision --title "Use REST" --rationale "Team familiarity"
+
+# Query with filters
+am memory query --all --type decision
+am memory query decisions --plan api-design
+```
+
+### Plan Versioning Commands
+
+| Command | Description |
+|---------|-------------|
+| `am plan init <name>` | Create a new versioned plan |
+| `am plan commit <name> -m "msg"` | Commit current plan as new version |
+| `am plan log <name>` | Show version history |
+| `am plan show <name>` | Show current version |
+| `am plan list` | List all plans |
+| `am plan link <name> --memory <ref>` | Link memory to plan |
+| `am plan timeline [name]` | Show ASCII timeline of plan evolution |
+
+**Example Workflow:**
+```bash
+# Create plan
+am plan init api-design
+
+# Edit .agentmux/plans/@nui/api-design/draft.md
+am plan commit api-design -m "v1: REST approach"
+
+# Link a decision
+am plan link api-design --memory am-8f2d
+
+# View with linked memories
+am plan show api-design --with-memory
+
+# View timeline
+am plan timeline api-design
+```
+
+### Context Injection (Phase 3)
+
+Auto-inject relevant memory when messaging other agents:
+
+```bash
+# Send message with context injection
+agentmux send sam "What about auth?" --inject
+
+# Sam sees:
+# 📨 [@nui → @sam]: What about auth?
+# 📎 Context: [decisions] Use JWT tokens: Team familiarity with JWT
+```
+
 **Spawn Examples:**
 ```bash
 agentmux spawn opencode max     # Create "max" agent with opencode
