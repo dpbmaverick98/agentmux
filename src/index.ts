@@ -280,7 +280,6 @@ program
       return;
     }
 
-    let lastCommitCount = 0;
     let lastUpdateTime = Date.now();
 
     function renderStatus() {
@@ -293,48 +292,19 @@ program
       const secondsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
       process.stdout.write(`${chalk.gray(`⏱️  Last update: ${secondsSinceUpdate}s ago`)}\n\n`);
 
-      // Show Recent Commits
+      // Show Recent Commits using git log
       console.log(chalk.yellow('Recent Commits:'));
       try {
-        const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
-        try {
-          fs.accessSync(commitsPath, fs.constants.F_OK);
-          // Use exec to tail the last 20 lines
-          const tailOutput = exec(`tail -n 20 "${commitsPath}" 2>/dev/null`);
-          if (tailOutput && tailOutput.trim()) {
-            const lines = tailOutput.trim().split('\n').filter((l: string) => l.trim() && !l.startsWith('#'));
-            if (lines.length > 0) {
-              lines.reverse().forEach((line: string) => {
-                // Parse format: [timestamp] PENDING/REVIEWED hash @agent: message [| reviewer]
-                const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
-                if (match) {
-                  const [, timestamp, status, hash, agent, message, reviewer] = match;
-                  const isReviewed = status === 'REVIEWED';
-                  const symbol = isReviewed ? '●' : '○';
-                  const agentName = agent.replace('@', '');
-                  const agentColor = agentName === 'nui' ? chalk.cyan :
-                                    agentName === 'sam' ? chalk.green :
-                                    agentName === 'wit' ? chalk.magenta : chalk.white;
-                  
-                  const shortHash = hash.substring(0, 7);
-                  let displayLine = `${shortHash} ${agent}: ${message}`;
-                  if (reviewer) {
-                    displayLine += ` (${reviewer})`;
-                  }
-                  
-                  console.log(`  ${symbol} ${agentColor(displayLine)}`);
-                }
-              });
-            } else {
-              console.log(chalk.gray('  No commits yet'));
-            }
-          } else {
-            console.log(chalk.gray('  No commits yet'));
-          }
-        } catch {
+        const gitLogOutput = exec('git log --oneline -10 --decorate 2>/dev/null');
+        if (gitLogOutput && gitLogOutput.trim()) {
+          const lines = gitLogOutput.trim().split('\n');
+          lines.forEach((line: string) => {
+            console.log(`  ${chalk.gray(line)}`);
+          });
+        } else {
           console.log(chalk.gray('  No commits yet'));
         }
-      } catch (e) {
+      } catch {
         console.log(chalk.gray('  No commits yet'));
       }
 
@@ -403,21 +373,8 @@ program
     // Initial render
     renderStatus();
 
-    // Set up polling for commit changes every 3 seconds
+    // Auto-refresh status every few seconds
     const pollInterval = setInterval(() => {
-      try {
-        const commitsPath = path.join(agentMuxDir, 'shared', 'commits.txt');
-        const stats = fs.statSync(commitsPath);
-        const currentCount = stats.mtime.getTime();
-        
-        if (currentCount !== lastCommitCount) {
-          lastCommitCount = currentCount;
-          lastUpdateTime = Date.now();
-        }
-      } catch {
-        // File doesn't exist yet
-      }
-      // Always re-render to update the idle counter
       renderStatus();
     }, STATUS_REFRESH_INTERVAL_MS);
 

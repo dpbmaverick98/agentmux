@@ -3932,7 +3932,6 @@ program2.command("status").description("Show live status with auto-refresh (runs
 `));
     return;
   }
-  let lastCommitCount = 0;
   let lastUpdateTime = Date.now();
   function renderStatus() {
     console.clear();
@@ -3945,40 +3944,17 @@ program2.command("status").description("Show live status with auto-refresh (runs
 `);
     console.log(source_default.yellow("Recent Commits:"));
     try {
-      const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
-      try {
-        fs.accessSync(commitsPath, fs.constants.F_OK);
-        const tailOutput = exec(`tail -n 20 "${commitsPath}" 2>/dev/null`);
-        if (tailOutput && tailOutput.trim()) {
-          const lines = tailOutput.trim().split(`
-`).filter((l) => l.trim() && !l.startsWith("#"));
-          if (lines.length > 0) {
-            lines.reverse().forEach((line) => {
-              const match = line.match(/^\[(.*?)\]\s+(\w+)\s+(\S+)\s+(@\w+):\s*(.*?)(?:\s*\|\s*(.*))?$/);
-              if (match) {
-                const [, timestamp, status, hash, agent, message, reviewer] = match;
-                const isReviewed = status === "REVIEWED";
-                const symbol = isReviewed ? "\u25CF" : "\u25CB";
-                const agentName = agent.replace("@", "");
-                const agentColor = agentName === "nui" ? source_default.cyan : agentName === "sam" ? source_default.green : agentName === "wit" ? source_default.magenta : source_default.white;
-                const shortHash = hash.substring(0, 7);
-                let displayLine = `${shortHash} ${agent}: ${message}`;
-                if (reviewer) {
-                  displayLine += ` (${reviewer})`;
-                }
-                console.log(`  ${symbol} ${agentColor(displayLine)}`);
-              }
-            });
-          } else {
-            console.log(source_default.gray("  No commits yet"));
-          }
-        } else {
-          console.log(source_default.gray("  No commits yet"));
-        }
-      } catch {
+      const gitLogOutput = exec("git log --oneline -10 --decorate 2>/dev/null");
+      if (gitLogOutput && gitLogOutput.trim()) {
+        const lines = gitLogOutput.trim().split(`
+`);
+        lines.forEach((line) => {
+          console.log(`  ${source_default.gray(line)}`);
+        });
+      } else {
         console.log(source_default.gray("  No commits yet"));
       }
-    } catch (e) {
+    } catch {
       console.log(source_default.gray("  No commits yet"));
     }
     console.log(source_default.yellow(`
@@ -4042,15 +4018,6 @@ Recent Messages:`));
   }
   renderStatus();
   const pollInterval = setInterval(() => {
-    try {
-      const commitsPath = path.join(agentMuxDir, "shared", "commits.txt");
-      const stats = fs.statSync(commitsPath);
-      const currentCount = stats.mtime.getTime();
-      if (currentCount !== lastCommitCount) {
-        lastCommitCount = currentCount;
-        lastUpdateTime = Date.now();
-      }
-    } catch {}
     renderStatus();
   }, STATUS_REFRESH_INTERVAL_MS);
   process.on("SIGINT", () => {
