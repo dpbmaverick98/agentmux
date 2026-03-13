@@ -109,13 +109,25 @@ echo "📚 Installing AgentMux skills to ~/.claude/skills/..."
 echo ""
 
 # Install skills globally for Claude
-mkdir -p "$HOME/.claude/skills/agentmux"
+mkdir -p "$HOME/.claude/skills/agentmux-core"
+mkdir -p "$HOME/.claude/skills/agentmux-workflow"
+mkdir -p "$HOME/.claude/skills/agentmux-memory"
 
 # Download skill files from GitHub
-echo "  → Downloading agentmux skill..."
-curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/agentmux/SKILL.md" \
-  > "$HOME/.claude/skills/agentmux/SKILL.md"
-echo "  ✓ agentmux skill installed"
+echo "  → Downloading agentmux-core skill..."
+curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/agentmux-core/SKILL.md" \
+  > "$HOME/.claude/skills/agentmux-core/SKILL.md"
+echo "  ✓ agentmux-core skill installed"
+
+echo "  → Downloading agentmux-workflow skill..."
+curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/agentmux-workflow/SKILL.md" \
+  > "$HOME/.claude/skills/agentmux-workflow/SKILL.md"
+echo "  ✓ agentmux-workflow skill installed"
+
+echo "  → Downloading agentmux-memory skill..."
+curl -fsSL "https://raw.githubusercontent.com/dpbmaverick98/agentmux/main/skills/agentmux-memory/SKILL.md" \
+  > "$HOME/.claude/skills/agentmux-memory/SKILL.md"
+echo "  ✓ agentmux-memory skill installed"
 
 echo ""
 echo "✅ AgentMux installed successfully!"
