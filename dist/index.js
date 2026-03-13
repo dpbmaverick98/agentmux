@@ -4067,7 +4067,25 @@ program2.command("send <to> <message...>").option("--inject", "Inject relevant m
   const displayMsg = `\uD83D\uDCE8 [@${from} \u2192 @${to}]: ${msg}${contextInjection}`;
   const timestamp = new Date().toISOString();
   try {
-    const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
+    let paneNum;
+    let availableAgents = [];
+    try {
+      const panesOutput = execFileSync("tmux", ["list-panes", "-t", `${session}:0`, "-F", "#{pane_index}: #{@agent}"], { encoding: "utf-8" });
+      const lines = panesOutput.trim().split(`
+`);
+      for (const line of lines) {
+        const parts = line.split(": ");
+        if (parts.length >= 2) {
+          const idx = parseInt(parts[0], 10);
+          const agentFull = parts[1].trim();
+          const agentName = agentFull.split(" ")[0];
+          availableAgents.push(agentName);
+          if (agentName.toLowerCase() === to.toLowerCase()) {
+            paneNum = idx;
+          }
+        }
+      }
+    } catch {}
     if (paneNum !== undefined) {
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${paneNum}`, "-l", displayMsg]);
       execFileSync("tmux", ["send-keys", "-t", `${session}:0.${paneNum}`, "Enter"]);
@@ -4080,7 +4098,10 @@ program2.command("send <to> <message...>").option("--inject", "Inject relevant m
 `;
       fs.appendFileSync(messagesPath, logEntry);
     } else {
-      console.log(source_default.red(`\u274C Unknown agent: ${to}. Try: status, nui, sam, wit`));
+      console.log(source_default.red(`\u274C Unknown agent: ${to}`));
+      if (availableAgents.length > 0) {
+        console.log(source_default.gray(`Available agents: ${availableAgents.join(", ")}`));
+      }
     }
   } catch (e) {
     console.log(source_default.red(`\u274C Failed to send to ${to}. Is the session running?`));
@@ -4407,8 +4428,26 @@ program2.command("kill <agent-name>").description("Kill a specific agent window"
         return;
       }
     } catch {}
-    if (AGENT_PANE_MAP[agentName] !== undefined) {
-      execFileSync("tmux", ["kill-pane", "-t", `${session}:0.${AGENT_PANE_MAP[agentName]}`]);
+    let paneNum;
+    try {
+      const panesOutput = execFileSync("tmux", ["list-panes", "-t", `${session}:0`, "-F", "#{pane_index}: #{@agent}"], { encoding: "utf-8" });
+      const lines = panesOutput.trim().split(`
+`);
+      for (const line of lines) {
+        const parts = line.split(": ");
+        if (parts.length >= 2) {
+          const idx = parseInt(parts[0], 10);
+          const agentFull = parts[1].trim();
+          const name = agentFull.split(" ")[0];
+          if (name.toLowerCase() === agentName.toLowerCase()) {
+            paneNum = idx;
+            break;
+          }
+        }
+      }
+    } catch {}
+    if (paneNum !== undefined) {
+      execFileSync("tmux", ["kill-pane", "-t", `${session}:0.${paneNum}`]);
       console.log(source_default.green(`\u2705 Agent "${agentName}" killed
 `));
       return;

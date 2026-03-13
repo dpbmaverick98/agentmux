@@ -433,7 +433,29 @@ program
     const timestamp = new Date().toISOString();
 
     try {
-      const paneNum = AGENT_PANE_MAP[to.toLowerCase()];
+      // Find agent in panes by @agent option
+      let paneNum: number | undefined;
+      let availableAgents: string[] = [];
+      
+      try {
+        const panesOutput = execFileSync('tmux', ['list-panes', '-t', `${session}:0`, '-F', '#{pane_index}: #{@agent}'], { encoding: 'utf-8' });
+        const lines = panesOutput.trim().split('\n');
+        for (const line of lines) {
+          const parts = line.split(': ');
+          if (parts.length >= 2) {
+            const idx = parseInt(parts[0], 10);
+            const agentFull = parts[1].trim();
+            // Extract agent name from format "name (harness)"
+            const agentName = agentFull.split(' ')[0];
+            availableAgents.push(agentName);
+            if (agentName.toLowerCase() === to.toLowerCase()) {
+              paneNum = idx;
+            }
+          }
+        }
+      } catch {
+        // Session or panes not found
+      }
 
       if (paneNum !== undefined) {
         execFileSync('tmux', ['send-keys', '-t', `${session}:0.${paneNum}`, '-l', displayMsg]);
@@ -448,7 +470,10 @@ program
         const logEntry = `[${timestamp}] ${displayMsg}\n`;
         fs.appendFileSync(messagesPath, logEntry);
       } else {
-        console.log(chalk.red(`❌ Unknown agent: ${to}. Try: status, nui, sam, wit`));
+        console.log(chalk.red(`❌ Unknown agent: ${to}`));
+        if (availableAgents.length > 0) {
+          console.log(chalk.gray(`Available agents: ${availableAgents.join(', ')}`));
+        }
       }
     } catch (e) {
       console.log(chalk.red(`❌ Failed to send to ${to}. Is the session running?`));
@@ -834,7 +859,7 @@ program
     console.log(chalk.blue(`\n💀 Killing ${agentName}...`));
 
     try {
-      // Check if it's a window (exact match)
+      // Check if it's a window (for --tab spawned agents)
       try {
         const windowsOutput = execFileSync('tmux', ['list-windows', '-t', session, '-F', '#{window_name}'], { encoding: 'utf-8' });
         const windows = windowsOutput.trim().split('\n');
@@ -845,13 +870,34 @@ program
           return;
         }
       } catch {
-        // Not a window, continue to check fixed pane agents
+        // Not a window, continue to check panes
       }
 
-      // Check if it's a fixed pane agent
-      if (AGENT_PANE_MAP[agentName] !== undefined) {
+      // Search for agent in panes by @agent option
+      let paneNum: number | undefined;
+      try {
+        const panesOutput = execFileSync('tmux', ['list-panes', '-t', `${session}:0`, '-F', '#{pane_index}: #{@agent}'], { encoding: 'utf-8' });
+        const lines = panesOutput.trim().split('\n');
+        for (const line of lines) {
+          const parts = line.split(': ');
+          if (parts.length >= 2) {
+            const idx = parseInt(parts[0], 10);
+            const agentFull = parts[1].trim();
+            // Extract agent name from format "name (harness)"
+            const name = agentFull.split(' ')[0];
+            if (name.toLowerCase() === agentName.toLowerCase()) {
+              paneNum = idx;
+              break;
+            }
+          }
+        }
+      } catch {
+        // Error listing panes
+      }
+
+      if (paneNum !== undefined) {
         // Kill the pane
-        execFileSync('tmux', ['kill-pane', '-t', `${session}:0.${AGENT_PANE_MAP[agentName]}`]);
+        execFileSync('tmux', ['kill-pane', '-t', `${session}:0.${paneNum}`]);
         console.log(chalk.green(`✅ Agent "${agentName}" killed\n`));
         return;
       }
